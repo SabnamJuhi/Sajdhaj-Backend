@@ -10,6 +10,7 @@ const Product = require("./products/product.model")
 const ProductRating = require("./products/productRating.model")
 const ProductReview = require("./products/productReview.model")
 const ProductSpec = require("./products/productSpec.model")
+const ProductPrice = require("./products/price.model")
 
 // Variants
 const ProductVariant = require("./productVariants/productVariant.model")
@@ -21,6 +22,7 @@ const Offer = require("./offers/offer.model")
 const OfferSub = require("./offers/offerSub.model")
 const OfferApplicableCategory = require("./offers/offerApplicableCategory.model")
 const OfferApplicableProduct = require("./offers/offerApplicableProduct.model")
+
 
 
 // SubCategory Relations
@@ -43,6 +45,8 @@ Product.belongsTo(Category, { foreignKey: "categoryId" })
 Product.belongsTo(SubCategory, { foreignKey: "subCategoryId" })
 Product.belongsTo(ProductCategory, { foreignKey: "productCategoryId" })
 
+
+
 //productRating Relations
 Product.hasOne(ProductRating, {foreignKey: "productId",as: "rating"})
 ProductRating.belongsTo(Product, {foreignKey: "productId"})
@@ -55,22 +59,34 @@ ProductReview.belongsTo(Product, {foreignKey: "productId"})
 Product.hasMany(ProductSpec, {foreignKey: "productId",as: "specs"})
 ProductSpec.belongsTo(Product, {foreignKey: "productId",as: "product"})
 
-//ProductVariant Relations
-ProductVariant.hasMany(VariantImage, { foreignKey: "variantId" })
-ProductVariant.hasMany(VariantSize, { foreignKey: "variantId" })
+//productPrice Relations
+Product.hasOne(ProductPrice, { foreignKey: 'productId',as: "price"});
+ProductPrice.belongsTo(Product, {foreignKey: "productId",as: "product"})
 
-VariantImage.belongsTo(ProductVariant, { foreignKey: "variantId" })
-VariantSize.belongsTo(ProductVariant, { foreignKey: "variantId" })
+        //ProductVariant Relations
+// This is the missing link!
+Product.hasMany(ProductVariant, { foreignKey: "productId", as: "variants" });
+ProductVariant.belongsTo(Product, { foreignKey: "productId", as: "product" });
+
+// Ensure your variant sub-items are also linked
+ProductVariant.hasMany(VariantImage, { foreignKey: "variantId", as: "images" });
+VariantImage.belongsTo(ProductVariant, { foreignKey: "variantId" });
+
+ProductVariant.hasMany(VariantSize, { foreignKey: "variantId", as: "sizes" });
+VariantSize.belongsTo(ProductVariant, { foreignKey: "variantId" });
 
 
+//offer Relations
+Product.hasMany(OfferApplicableProduct, { foreignKey: "productId", as: "offerApplicableProducts" });
+OfferApplicableProduct.belongsTo(Product, { foreignKey: "productId" });
 
 Offer.hasMany(OfferSub, { foreignKey: "offerId", as: "subOffers" })
 Offer.hasMany(OfferApplicableCategory, {foreignKey: "offerId", as: "applicableCategories"})
-Offer.hasMany(OfferApplicableProduct, {foreignKey: "offerId", as: "applicableProducts"})
+Offer.hasMany(OfferApplicableProduct, {foreignKey: "offerId", as: "offerApplicableProducts"})
 
 OfferSub.belongsTo(Offer, { foreignKey: "offerId" })
 OfferApplicableCategory.belongsTo(Offer, { foreignKey: "offerId" })
-OfferApplicableProduct.belongsTo(Offer, { foreignKey: "offerId" })
+OfferApplicableProduct.belongsTo(Offer, { foreignKey: "offerId", as: "offerDetails" });
 
 
 module.exports = {

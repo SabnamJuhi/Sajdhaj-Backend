@@ -1,22 +1,35 @@
 const Product = require("../../models/products/product.model")
 
+
+
+
+
 // CREATE PRODUCT
  
+// exports.createProduct = async (req, res) => {
+//   try {
+//     const product = await Product.create(req.body)
+//     await buildProductView(product.id)
+//     res.status(201).json({
+//       message: "Product created successfully",
+//       data: product
+//     })
+//   } catch (error) {
+//     res.status(400).json({
+//       message: "Failed to create product",
+//       error: error.message
+//     })
+//   }
+// }
 exports.createProduct = async (req, res) => {
   try {
-    const product = await Product.create(req.body)
-
-    res.status(201).json({
-      message: "Product created successfully",
-      data: product
-    })
-  } catch (error) {
-    res.status(400).json({
-      message: "Failed to create product",
-      error: error.message
-    })
+    const product = await createProductService(req.body)
+    res.status(201).json(product)
+  } catch (err) {
+    res.status(500).json({ message: err.message })
   }
 }
+
 
 // GET ALL PRODUCTS
  

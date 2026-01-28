@@ -13,7 +13,8 @@ ProductRating.init(
     },
     productId: {
       type: DataTypes.INTEGER,
-      allowNull: false
+      allowNull: false,
+      unique: true
     },
     averageRating: DataTypes.FLOAT,
     totalRatings: DataTypes.INTEGER,

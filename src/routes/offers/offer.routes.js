@@ -1,9 +1,9 @@
 const router = require("express").Router()
-const offerCtrl = require("../controllers/offer/offer.controller")
+const offerCtrl = require("../../controllers/offers/offer.controller")
 
 router.post("/", offerCtrl.createOffer)
 router.get("/:id", offerCtrl.getOffer)
-router.patch("/:id", offerCtrl.updateOffer)
+// router.patch("/:id", offerCtrl.updateOffer)
 router.delete("/:id", offerCtrl.deactivateOffer)
 
 module.exports = router
