@@ -21,6 +21,7 @@ const router = express.Router()
 const productController = require("../../controllers/product.aggregate.controller")
 
 router.post("/create", productController.createProduct)
+router.get("/", productController.getAllProductsDetails)
 router.get("/:id", productController.getProductById)
 router.put("/:id", productController.updateProductDetails)
 

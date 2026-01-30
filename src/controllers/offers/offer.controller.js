@@ -127,21 +127,27 @@ exports.createOffer = async (req, res) => {
     })
   }
 }
-/**
- * GET ALL OFFERS
- * Returns all offers with their associated sub-offers
- */
+
+ // GET ALL OFFERS (Fully Nested)
+ 
 exports.getAllOffers = async (req, res) => {
   try {
     const offers = await Offer.findAll({
-      // include: [
-      //   { 
-      //     model: OfferSub, 
-      //     as: "subOffers",
-      //     attributes: ["id", "code", "discountType", "discountValue"] // Optional: limit fields for performance
-      //   }
-      // ],
-      order: [["createdAt", "DESC"]] // Show newest offers first
+      include: [
+        { 
+          model: OfferSub, 
+          as: "subOffers" 
+        },
+        { 
+          model: OfferApplicableCategory, 
+          as: "applicableCategories" 
+        },
+        { 
+          model: OfferApplicableProduct, 
+          as: "offerApplicableProducts" 
+        }
+      ],
+      order: [["createdAt", "DESC"]] // Newest offers at the top
     });
 
     return res.status(200).json({

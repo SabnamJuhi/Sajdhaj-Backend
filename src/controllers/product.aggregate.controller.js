@@ -260,3 +260,29 @@ exports.updateProductDetails = async (req, res) => {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
+exports.getAllProductsDetails = async (req, res) => {
+  try {
+    const products = await Product.findAll({
+      include: [
+        // Category Info
+        { model: require("../models/category/category.model"), as: "category", attributes: ["id", "name"] },
+        { model: require("../models/category/subcategory.model"), as: "subCategory", attributes: ["id", "name"] },
+        
+        // Basic Product Info needed for cards
+        { model: ProductPrice, as: "price" },
+        {
+          model: ProductVariant,
+          as: "variants",
+          limit: 1, // Only get first variant for the thumbnail
+          include: [{ model: VariantImage, as: "images", limit: 1 }]
+        }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    res.json({ success: true, data: products });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
