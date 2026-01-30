@@ -48,16 +48,51 @@ exports.getAllCategories = async (req, res) => {
 
 
 
-//GET CATEGORY BY ID (Public)
+// GET CATEGORY BY ID (Nested with Sub and Product Categories)
 exports.getCategoryById = async (req, res) => {
-  const category = await Category.findByPk(req.params.id)
+  try {
+    const { id } = req.params;
 
-  if (!category) {
-    return res.status(404).json({ message: "Category not found" })
+    const category = await Category.findByPk(id, {
+      attributes: ["id", "name"],
+      include: [
+        {
+          model: SubCategory,
+          as: "subcategories", // Must match the alias in your models/index.js
+          attributes: ["id", "name"],
+          include: [
+            {
+              model: ProductCategory,
+              as: "productCategories", // Must match the alias in your models/index.js
+              attributes: ["id", "name"]
+            }
+          ]
+        }
+      ]
+    });
+
+    // Check if category exists
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        message: "Category not found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: category
+    });
+
+  } catch (error) {
+    console.error("GetCategoryById Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch category details",
+      error: error.message
+    });
   }
-
-  res.json(category)
-}
+};
 
 //UPDATE CATEGORY (Admin)
 exports.updateCategory = async (req, res) => {
