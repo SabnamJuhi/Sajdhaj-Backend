@@ -1,4 +1,3 @@
-// const Category = require("../../models/category/category.model")
 const { Category, SubCategory, ProductCategory } = require("../../models");
 
 //CREATE CATEGORY (Admin)
@@ -26,25 +25,25 @@ exports.createCategory = async (req, res) => {
 }
 
 //GET ALL CATEGORIES (Public)
-exports.getAllCategories = async (req, res) => {
-  try {
-    const categories = await Category.findAll({
-      attributes: ["id", "name"], // ✅ Only return needed fields
-      order: [["id", "ASC"]]
-    })
+// exports.getAllCategories = async (req, res) => {
+//   try {
+//     const categories = await Category.findAll({
+//       attributes: ["id", "name"], // ✅ Only return needed fields
+//       order: [["id", "ASC"]]
+//     })
 
-    res.status(200).json({
-      success: true,
-      data: categories
-    })
-  } catch (error) {
-    console.error("GetAllCategories Error:", error)
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch categories"
-    })
-  }
-}
+//     res.status(200).json({
+//       success: true,
+//       data: categories
+//     })
+//   } catch (error) {
+//     console.error("GetAllCategories Error:", error)
+//     res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch categories"
+//     })
+//   }
+// }
 
 
 

@@ -24,6 +24,7 @@ router.post("/create", productController.createProduct)
 router.get("/", productController.getAllProductsDetails)
 router.get("/:id", productController.getProductById)
 router.put("/:id", productController.updateProductDetails)
+router.delete('/:id', productController.softDeleteProduct)
 
 
 module.exports = router
