@@ -1,4 +1,5 @@
-const Category = require("../../models/category/category.model")
+// const Category = require("../../models/category/category.model")
+const { Category, SubCategory, ProductCategory } = require("../../models");
 
 //CREATE CATEGORY (Admin)
 exports.createCategory = async (req, res) => {
@@ -91,3 +92,40 @@ exports.deleteCategory = async (req, res) => {
 
   res.json({ message: "Category disabled successfully" })
 }
+
+
+// GET ALL CATEGORIES (Nested with Sub and Product Categories)
+exports.getAllNestedCategories = async (req, res) => {
+  try {
+    const categories = await Category.findAll({
+      attributes: ["id", "name"],
+      include: [
+        {
+          model: SubCategory,
+          as: "subcategories", // Matches 'as' in models/index.js
+          attributes: ["id", "name"],
+          include: [
+            {
+              model: ProductCategory,
+              as: "productCategories", // Matches 'as' in models/index.js
+              attributes: ["id", "name"]
+            }
+          ]
+        }
+      ],
+      order: [["id", "ASC"]]
+    });
+
+    res.status(200).json({
+      success: true,
+      data: categories
+    });
+  } catch (error) {
+    console.error("GetAllCategories Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch categories",
+      error: error.message
+    });
+  }
+};

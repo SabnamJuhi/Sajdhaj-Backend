@@ -1,5 +1,6 @@
 const sequelize = require("../config/db")
 
+const User = require("./user.model")
 // Category
 const Category = require("./category/category.model")
 const SubCategory = require("./category/subcategory.model")
@@ -23,6 +24,11 @@ const OfferSub = require("./offers/offerSub.model")
 const OfferApplicableCategory = require("./offers/offerApplicableCategory.model")
 const OfferApplicableProduct = require("./offers/offerApplicableProduct.model")
 
+//orders
+const CartItem = require("./orders/cart.model");
+const Order = require('./orders/order.model');
+const OrderItem = require('./orders/orderItem.model');
+const OrderAddress = require('./orders/orderAddress.model');
 
 
 // SubCategory Relations
@@ -88,6 +94,39 @@ OfferSub.belongsTo(Offer, { foreignKey: "offerId" })
 OfferApplicableCategory.belongsTo(Offer, { foreignKey: "offerId" })
 OfferApplicableProduct.belongsTo(Offer, { foreignKey: "offerId", as: "offerDetails" });
 
+// // --- Cart Associations ---
+// User.hasMany(CartItem);
+// CartItem.belongsTo(User);
+// Product.hasMany(CartItem);
+// CartItem.belongsTo(Product);
+
+// // --- Order Associations ---
+// User.hasMany(Order);
+// Order.belongsTo(User);
+
+// --- CART RELATIONS (FIXED) ---
+User.hasMany(CartItem, { foreignKey: "userId", onDelete: "CASCADE" });
+CartItem.belongsTo(User, { foreignKey: "userId" });
+
+Product.hasMany(CartItem, { foreignKey: "productId", onDelete: "CASCADE" });
+CartItem.belongsTo(Product, { foreignKey: "productId", as: "product" });
+
+ProductVariant.hasMany(CartItem, { foreignKey: "variantId", onDelete: "CASCADE" });
+CartItem.belongsTo(ProductVariant, { foreignKey: "variantId", as: "variant" });
+
+// --- ORDER RELATIONS (FIXED) ---
+User.hasMany(Order, { foreignKey: "userId", onDelete: "CASCADE" });
+Order.belongsTo(User, { foreignKey: "userId" });
+
+Order.hasMany(OrderItem, { foreignKey: "orderId", onDelete: "CASCADE" });
+OrderItem.belongsTo(Order, { foreignKey: "orderId" });
+
+Order.hasOne(OrderAddress, { foreignKey: "orderId", onDelete: "CASCADE" });
+OrderAddress.belongsTo(Order, { foreignKey: "orderId" });
+
+// Important for historical tracking
+Product.hasMany(OrderItem, { foreignKey: "productId", onDelete: "CASCADE" });
+OrderItem.belongsTo(Product, { foreignKey: "productId" });
 
 module.exports = {
   sequelize,
@@ -95,6 +134,7 @@ module.exports = {
   SubCategory,
   ProductCategory,
   Product,
+  ProductPrice,
   ProductRating,
   ProductReview,
   ProductSpec,
@@ -104,5 +144,10 @@ module.exports = {
   Offer,
   OfferSub,
   OfferApplicableCategory,
-  OfferApplicableProduct
+  OfferApplicableProduct,
+  User,
+  CartItem, 
+  Order, 
+  OrderItem, 
+  OrderAddress,
 }

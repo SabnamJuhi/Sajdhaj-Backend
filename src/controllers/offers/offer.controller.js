@@ -127,6 +127,37 @@ exports.createOffer = async (req, res) => {
     })
   }
 }
+/**
+ * GET ALL OFFERS
+ * Returns all offers with their associated sub-offers
+ */
+exports.getAllOffers = async (req, res) => {
+  try {
+    const offers = await Offer.findAll({
+      // include: [
+      //   { 
+      //     model: OfferSub, 
+      //     as: "subOffers",
+      //     attributes: ["id", "code", "discountType", "discountValue"] // Optional: limit fields for performance
+      //   }
+      // ],
+      order: [["createdAt", "DESC"]] // Show newest offers first
+    });
+
+    return res.status(200).json({
+      success: true,
+      count: offers.length,
+      data: offers
+    });
+  } catch (err) {
+    console.error("GetAllOffers Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch offers",
+      error: err.message
+    });
+  }
+};
 
 /**
  * GET OFFER BY ID
@@ -137,22 +168,23 @@ exports.getOffer = async (req, res) => {
       include: [
         { model: OfferSub, as: "subOffers" },
         { model: OfferApplicableCategory, as: "applicableCategories" },
-        { model: OfferApplicableProduct, as: "applicableProducts" }
+        // CHANGE THIS LINE BELOW:
+        { model: OfferApplicableProduct, as: "offerApplicableProducts" } 
       ]
-    })
+    });
 
     if (!offer) {
-      return res.status(404).json({ message: "Offer not found" })
+      return res.status(404).json({ message: "Offer not found" });
     }
 
-    return res.json(offer)
+    return res.json(offer);
   } catch (err) {
     return res.status(500).json({
       message: "Failed to fetch offer",
       error: err.message
-    })
+    });
   }
-}
+};
 
 
 /**
