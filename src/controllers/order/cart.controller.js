@@ -1,0 +1,153 @@
+const { CartItem, Product, ProductPrice, ProductVariant, VariantImage, VariantSize } = require("../../models");
+
+
+exports.getCart = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const cartItems = await CartItem.findAll({
+      where: { userId },
+      include: [
+        {
+          model: Product,
+          as: "product",
+          include: [{ model: ProductPrice, as: "price" }]
+        },
+        { 
+          model: ProductVariant, 
+          as: "variant",
+          include: [{ model: VariantImage, as: "images", limit: 1 }]
+        }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    let subTotal = 0;
+    let totalQuantity = 0;
+    
+    const items = cartItems.map(item => {
+      const sellingPrice = item.product?.price?.sellingPrice || 0;
+      const isAvailable = item.variant?.stockStatus === "In Stock" && item.variant?.totalStock > 0;
+      
+      const itemTotal = sellingPrice * item.quantity;
+
+      // INDUSTRY LOGIC: Only add to total if item is actually available to buy
+      if (isAvailable) {
+        subTotal += itemTotal;
+        totalQuantity += item.quantity;
+      }
+
+      return {
+        cartId: item.id,
+        productId: item.productId,
+        variantId: item.variantId,
+        title: item.product?.title || "Unknown Product",
+        image: item.variant?.images?.[0]?.imageUrl || null, 
+        variant: {
+          color: item.variant?.colorName || "Default",
+          size: item.selectedSize,
+          stock: item.variant?.totalStock || 0,
+          status: item.variant?.stockStatus || "Out of Stock",
+          isAvailable: isAvailable // Frontend can use this to grey out the item
+        },
+        price: sellingPrice,
+        quantity: item.quantity,
+        total: isAvailable ? itemTotal : 0 // Show 0 total if out of stock
+      };
+    });
+
+    // Calculations based only on available items
+    const taxAmount = Math.round(subTotal * 0.12);
+    const deliveryCharge = (subTotal > 5000 || subTotal === 0) ? 0 : 150;
+
+    res.status(200).json({
+      success: true,
+      data: items,
+      summary: {
+        itemsCount: items.length,
+        totalQuantity,
+        subTotal,
+        tax: { rate: "12%", amount: taxAmount, type: "GST" },
+        grandTotal: subTotal + taxAmount + deliveryCharge,
+        currency: "INR",
+        canCheckout: items.every(i => i.variant.isAvailable) // Helper for frontend
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * 2. ADD TO CART
+ * Logic: Must check productId, variantId AND selectedSize.
+ */
+exports.addToCart = async (req, res) => {
+  try {
+    const { productId, variantId, size } = req.body;
+
+    // 1. VALIDATION: Does this variant actually belong to this product?
+    const validVariant = await ProductVariant.findOne({
+      where: { id: variantId, productId: productId }
+    });
+
+    if (!validVariant) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Invalid variant selected for this product." 
+      });
+    }
+
+    // 2. Proceed with FindOrCreate...
+    const [item, created] = await CartItem.findOrCreate({
+      where: { userId: req.user.id, productId, variantId, selectedSize: size },
+      defaults: { quantity: 1 }
+    });
+    
+    // ... rest of your code
+    if (!created) {
+      await item.increment('quantity', { by: 1 });
+    }
+
+    res.status(200).json({ success: true, message: "Added to cart" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * 3. DECREASE QUANTITY
+ */
+exports.decreaseQuantity = async (req, res) => {
+  try {
+    const { productId, variantId, size } = req.body;
+    const userId = req.user.id;
+
+    const item = await CartItem.findOne({ 
+      where: { userId, productId, variantId, selectedSize: size } 
+    });
+
+    if (!item) return res.status(404).json({ message: "Item not found" });
+
+    if (item.quantity > 1) {
+      await item.decrement('quantity', { by: 1 });
+    } else {
+      await item.destroy();
+    }
+    res.json({ success: true, message: "Quantity decreased" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
+ * 4. REMOVE ITEM COMPLETELY
+ */
+exports.removeFromCart = async (req, res) => {
+  try {
+    const { cartId } = req.params;
+    await CartItem.destroy({ where: { id: cartId, userId: req.user.id } });
+    res.json({ success: true, message: "Item removed from cart" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
