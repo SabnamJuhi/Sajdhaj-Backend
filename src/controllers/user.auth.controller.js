@@ -4,6 +4,7 @@ const User = require("../models/user.model");
 const { hashPassword, comparePassword } = require("../utils/password");
 const { generateToken, generateResetToken } = require("../utils/jwt");
 const { sendResetPasswordEmail } = require("../utils/email");
+const TokenBlacklist = require("../models/tokenBlacklist.model");
 
 exports.register = async (req, res) => {
   try {
@@ -190,6 +191,64 @@ exports.getUserById = async (req, res) => {
       success: true,
       user,
     });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+/* ================= DELETE USER ================= */
+exports.deleteUser = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    //  Authorization check (only self OR admin can delete)
+    if (req.user.id !== Number(id) && req.user.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to delete this user",
+      });
+    }
+
+    //  Find user
+    const user = await User.findByPk(id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Delete user
+    await user.destroy();
+
+    res.json({
+      success: true,
+      message: "User deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+/* ================= LOGOUT USER (Blacklist) ================= */
+exports.logout = async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+
+    if (!token) {
+      return res.status(400).json({ message: "Token required" });
+    }
+
+    await TokenBlacklist.create({ token });
+
+    res.json({
+      success: true,
+      message: "Logged out successfully",
+    });
+
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

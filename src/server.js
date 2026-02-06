@@ -7,3 +7,4 @@ sequelize.sync().then(() => {
     console.log(`Admin server running on port ${process.env.PORT}`)
   })
 })
+

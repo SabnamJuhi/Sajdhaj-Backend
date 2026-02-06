@@ -7,12 +7,12 @@
 // router.get("/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 
 // // 2. Google Callback
-// router.get("/google/callback", 
+// router.get("/google/callback",
 //   passport.authenticate("google", { session: false, failureRedirect: "/login-failed" }),
 //   (req, res) => {
 //     // Generate JWT for the user returned by Google
 //     const token = jwt.sign({ id: req.user.id }, process.env.JWT_SECRET, { expiresIn: '1d' });
-    
+
 //     // Redirect to frontend with token in URL (Industry standard for SPAs)
 //     res.redirect(`http://localhost:5173/auth-success?token=${token}`);
 //   }
@@ -20,14 +20,22 @@
 
 // module.exports = router;
 
-
-
-
 // routes/auth.routes.js
 const express = require("express");
 const passport = require("passport");
 const jwt = require("jsonwebtoken");
-const { register, login, forgotPassword, resetPassword, getUsers, getUserById } = require("../controllers/user.auth.controller");
+const {
+  register,
+  login,
+  forgotPassword,
+  resetPassword,
+  getUsers,
+  getUserById,
+  deleteUser,
+  logout,
+} = require("../controllers/user.auth.controller");
+const { protect } = require("../middleware/user.auth.middleware");
+const {protected} = require("../middleware/user.logout.middleware")
 
 const router = express.Router();
 
@@ -35,32 +43,33 @@ const router = express.Router();
 router.post("/register", register);
 router.post("/login", login);
 
+router.delete("/users/:id", protected, deleteUser);
+router.post("/logout", protected, logout);
+router.get("/users", protect, getUsers);
+router.get("/users/:id", protect, getUserById);
+
 // Forgot-password
-router.post("/forgot-password", forgotPassword)
+router.post("/forgot-password", forgotPassword);
 
 // Resest-Password
-router.post("/reset-password", resetPassword)
+router.post("/reset-password", resetPassword);
 
 // Google auth
-router.get("/google",
-  passport.authenticate("google", { scope: ["profile", "email"] })
+router.get(
+  "/google",
+  passport.authenticate("google", { scope: ["profile", "email"] }),
 );
 
-router.get("/google/callback",
+router.get(
+  "/google/callback",
   passport.authenticate("google", { session: false }),
   (req, res) => {
-    const token = jwt.sign(
-      { id: req.user.id },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES }
-    );
+    const token = jwt.sign({ id: req.user.id }, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRES,
+    });
 
     res.redirect(`http://localhost:5173/auth-success?token=${token}`);
-  }
+  },
 );
-
-/* USERS */
-router.get("/users", getUsers);
-router.get("/users/:id", getUserById);
 
 module.exports = router;

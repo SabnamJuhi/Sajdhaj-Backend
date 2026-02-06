@@ -9,6 +9,7 @@ app.use(cors())
 app.use(express.json());
 app.use(passport.initialize());
 
+
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 app.use("/api/admin", require("./routes/admin.auth.routes"))
@@ -37,6 +38,15 @@ app.use("/api/cart", require("./routes/order/cart.routes"))
 // // This line is crucial: It makes http://localhost:5000/uploads/... accessible
 // app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
+
+app.use((err, req, res, next) => {
+  console.error("GLOBAL ERROR:", err);
+
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || "Internal Server Error",
+  });
+});
 
 
 module.exports = app
