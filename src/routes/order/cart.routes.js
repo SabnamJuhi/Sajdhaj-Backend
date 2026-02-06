@@ -1,8 +1,9 @@
 const router = require("express").Router();
 const cartCtrl = require("../../controllers/order/cart.controller");
 const { protect } = require("../../middleware/user.auth.middleware");
+const {protected} = require("../../middleware/user.logout.middleware")
 
-router.use(protect); // All cart actions require a logged-in user
+router.use(protected); // All cart actions require a logged-in user
 
 router.get("/", cartCtrl.getCart);
 router.post("/add", cartCtrl.addToCart);

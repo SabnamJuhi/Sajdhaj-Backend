@@ -36,6 +36,7 @@ const {
 } = require("../controllers/user.auth.controller");
 const { protect } = require("../middleware/user.auth.middleware");
 const {protected} = require("../middleware/user.logout.middleware")
+const adminAuth = require("../middleware/admin.auth.middleware")
 
 const router = express.Router();
 
@@ -45,7 +46,7 @@ router.post("/login", login);
 
 router.delete("/users/:id", protected, deleteUser);
 router.post("/logout", protected, logout);
-router.get("/users", protect, getUsers);
+router.get("/users", adminAuth, getUsers);
 router.get("/users/:id", protect, getUserById);
 
 // Forgot-password
