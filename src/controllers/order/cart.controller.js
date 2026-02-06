@@ -114,6 +114,81 @@ exports.addToCart = async (req, res) => {
   }
 };
 
+
+/**
+ * MERGE GUEST CART AFTER LOGIN
+ * Route: POST /cart/merge
+ * Body: { items: [{ productId, variantId, size, quantity }] }
+ */
+exports.mergeGuestCart = async (req, res) => {
+  const transaction = await CartItem.sequelize.transaction();
+
+  try {
+    const userId = req.user.id;
+    const { items } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Guest cart is empty or invalid"
+      });
+    }
+
+    for (const guestItem of items) {
+      const { productId, variantId, size, quantity } = guestItem;
+
+      // 1️⃣ Validate variant belongs to product
+      const validVariant = await ProductVariant.findOne({
+        where: { id: variantId, productId }
+      });
+
+      if (!validVariant) continue; // skip invalid items
+
+      // 2️⃣ Check if item already exists in user's DB cart
+      const existingItem = await CartItem.findOne({
+        where: { userId, productId, variantId, selectedSize: size },
+        transaction
+      });
+
+      if (existingItem) {
+        // 3️⃣ Increase quantity
+        await existingItem.increment("quantity", {
+          by: quantity || 1,
+          transaction
+        });
+      } else {
+        // 4️⃣ Create new cart item
+        await CartItem.create(
+          {
+            userId,
+            productId,
+            variantId,
+            selectedSize: size,
+            quantity: quantity || 1
+          },
+          { transaction }
+        );
+      }
+    }
+
+    await transaction.commit();
+
+    return res.status(200).json({
+      success: true,
+      message: "Guest cart merged successfully"
+    });
+
+  } catch (error) {
+    await transaction.rollback();
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+
+
 /**
  * 3. DECREASE QUANTITY
  */

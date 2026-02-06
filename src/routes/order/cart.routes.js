@@ -7,6 +7,7 @@ router.use(protected); // All cart actions require a logged-in user
 
 router.get("/", cartCtrl.getCart);
 router.post("/add", cartCtrl.addToCart);
+router.post("/merge", cartCtrl.mergeGuestCart);
 router.post("/decrease", cartCtrl.decreaseQuantity);
 
 module.exports = router;

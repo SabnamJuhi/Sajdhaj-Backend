@@ -1,15 +1,16 @@
-// const {
-//   Order,
-//   OrderItem,
-//   OrderAddress,
-//   CartItem,
-//   Product,
-//   ProductPrice,
-//   ProductVariant,
-//   sequelize,
-// } = require("../../models");
-// const { generateOrderNumber } = require("../../utils/helpers");
+const {
+  Order,
+  OrderItem,
+  OrderAddress,
+  CartItem,
+  Product,
+  ProductPrice,
+  ProductVariant,
+  sequelize,
+} = require("../../models");
+const { generateOrderNumber } = require("../../utils/helpers");
 // const Razorpay = require("razorpay");
+const { encrypt } = require("../../utils/iciciCrypto");
 
 // const razorpay = new Razorpay({
 //   key_id: process.env.RAZORPAY_KEY_ID,
@@ -118,6 +119,46 @@
 //   }
 // };
 
+
+
+exports.placeOrder = async (req, res) => {
+  const t = await sequelize.transaction();
+
+  try {
+    const userId = req.user.id;
+    const { shippingAddress, paymentMethod } = req.body;
+
+    // 👉 all your existing order creation logic remains SAME
+    // subtotal, tax, shipping, Order.create, OrderItems, Address etc.
+
+    await t.commit();
+
+    // 🔹 ICICI payment request data
+    const paymentData = {
+      merchantId: process.env.ICICI_MERCHANT_ID,
+      orderNumber: order.orderNumber,
+      amount: totalAmount,
+      currency: "INR",
+      returnUrl: process.env.ICICI_RETURN_URL,
+      cancelUrl: process.env.ICICI_CANCEL_URL,
+    };
+
+    const payload = JSON.stringify(paymentData);
+
+    const encryptedData = encrypt(payload, process.env.ICICI_ENC_KEY);
+
+    res.status(200).json({
+      success: true,
+      paymentUrl: process.env.ICICI_PAYMENT_URL,
+      encryptedData,
+    });
+
+  } catch (error) {
+    await t.rollback();
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // // STEP 2: Finalize Order (Webhook from Payment Gateway)
 // exports.handlePaymentWebhook = async (req, res) => {
 //   const t = await sequelize.transaction();
@@ -155,3 +196,54 @@
 //     res.status(500).json({ success: false, message: error.message });
 //   }
 // };
+
+
+
+exports.iciciCallback = async (req, res) => {
+  const t = await sequelize.transaction();
+
+  try {
+    const { encData } = req.body;
+
+    const decrypted = decrypt(encData, process.env.ICICI_ENC_KEY);
+    const data = JSON.parse(decrypted);
+
+    const { orderNumber, transactionId, status } = data;
+
+    const order = await Order.findOne({
+      where: { orderNumber },
+      include: [OrderItem],
+      transaction: t,
+    });
+
+    if (!order) throw new Error("Order not found");
+
+    if (status === "SUCCESS") {
+      await order.update(
+        { status: "confirmed", paymentStatus: "paid", transactionId },
+        { transaction: t }
+      );
+
+      for (const item of order.OrderItems) {
+        const product = await Product.findByPk(item.productId, { transaction: t });
+        await product.decrement("stockQuantity", { by: item.quantity, transaction: t });
+      }
+
+      await CartItem.destroy({ where: { userId: order.userId }, transaction: t });
+    } else {
+      await order.update(
+        { status: "cancelled", paymentStatus: "failed" },
+        { transaction: t }
+      );
+    }
+
+    await t.commit();
+
+    res.send("OK");
+
+  } catch (error) {
+    await t.rollback();
+    res.status(500).send("Error");
+  }
+};
+
