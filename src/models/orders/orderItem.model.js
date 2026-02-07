@@ -34,6 +34,14 @@ OrderItem.init(
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
     },
+    variantId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+    sizeId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
     variantInfo: {
       type: DataTypes.JSON, // To store { "color": "Red", "size": "XL" }
       allowNull: true,
@@ -43,7 +51,7 @@ OrderItem.init(
     sequelize,
     modelName: "OrderItem",
     tableName: "order_items",
-  }
+  },
 );
 
 module.exports = OrderItem;

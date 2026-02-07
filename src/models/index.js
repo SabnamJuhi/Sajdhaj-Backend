@@ -119,6 +119,11 @@ OrderAddress.belongsTo(Order, { foreignKey: "orderId" });
 Product.hasMany(OrderItem, { foreignKey: "productId", onDelete: "CASCADE" });
 OrderItem.belongsTo(Product, { foreignKey: "productId" });
 
+CartItem.belongsTo(VariantSize, { foreignKey: "sizeId", as: "variantSize" });
+
+VariantSize.hasMany(CartItem, { foreignKey: "sizeId", as: "cartItems" });
+
+
 module.exports = {
   sequelize,
   Category,
