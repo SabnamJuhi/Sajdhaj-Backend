@@ -162,9 +162,6 @@
  * Place Order & generate ICICI payment data
  */
 
-
-
-
 const {
   Order,
   OrderItem,
@@ -243,7 +240,25 @@ exports.placeOrder = async (req, res) => {
     const shippingFee = subtotal > 5000 ? 0 : 150;
     const totalAmount = subtotal + taxAmount + shippingFee;
 
+    // // 3️⃣ Create Order
+    // const order = await Order.create(
+    //   {
+    //     userId,
+    //     orderNumber: generateOrderNumber(),
+    //     subtotal,
+    //     taxAmount,
+    //     shippingFee,
+    //     totalAmount,
+    //     status: "pending",
+    //     paymentMethod,
+    //     paymentStatus: "unpaid",
+    //   },
+    //   { transaction: t },
+    // );
+
     // 3️⃣ Create Order
+    const isCOD = paymentMethod === "COD";
+
     const order = await Order.create(
       {
         userId,
@@ -252,9 +267,11 @@ exports.placeOrder = async (req, res) => {
         taxAmount,
         shippingFee,
         totalAmount,
-        status: "pending",
+
+        // 🔹 COD vs ONLINE difference
+        status: isCOD ? "confirmed" : "pending",
         paymentMethod,
-        paymentStatus: "unpaid",
+        paymentStatus: isCOD ? "unpaid" : "unpaid",
       },
       { transaction: t },
     );
@@ -285,6 +302,23 @@ exports.placeOrder = async (req, res) => {
 
     // ✅ Commit BEFORE payment gateway
     await t.commit();
+
+    /**
+     * ==========================================
+     * 💵 CASH ON DELIVERY FLOW
+     * ==========================================
+     */
+    if (paymentMethod === "COD") {
+      return res.status(200).json({
+        success: true,
+        message: "Order placed successfully with Cash on Delivery",
+        orderNumber: order.orderNumber,
+        totalAmount,
+        paymentMethod: "COD",
+        paymentStatus: "unpaid",
+        status: "confirmed",
+      });
+    }
 
     // --------------------------------------------------
     // 🏦 ICICI PAYMENT INIT
@@ -471,7 +505,7 @@ exports.iciciReturn = async (req, res) => {
     //  Validate checksum
     const validChecksum = generateChecksum(
       encData,
-      process.env.ICICI_CHECKSUM_KEY
+      process.env.ICICI_CHECKSUM_KEY,
     );
 
     if (validChecksum !== checksum) {
@@ -480,7 +514,7 @@ exports.iciciReturn = async (req, res) => {
 
     //  Decrypt ICICI response
     const decrypted = JSON.parse(
-      decrypt(encData, process.env.ICICI_ENCRYPTION_KEY)
+      decrypt(encData, process.env.ICICI_ENCRYPTION_KEY),
     );
 
     const { orderNumber, transactionId, status } = decrypted;
@@ -512,7 +546,7 @@ exports.iciciReturn = async (req, res) => {
           transactionId,
           paidAt: new Date(),
         },
-        { transaction: t }
+        { transaction: t },
       );
 
       // 5️⃣ Deduct stock
@@ -545,14 +579,14 @@ exports.iciciReturn = async (req, res) => {
 
       //  Redirect to frontend success page
       return res.redirect(
-        `${process.env.FRONTEND_URL}/payment-success?order=${order.orderNumber}`
+        `${process.env.FRONTEND_URL}/payment-success?order=${order.orderNumber}`,
       );
     }
 
     //  FAILED PAYMENT FLOW
     await order.update(
       { status: "cancelled", paymentStatus: "failed" },
-      { transaction: t }
+      { transaction: t },
     );
 
     await t.commit();
@@ -568,7 +602,7 @@ exports.iciciReturn = async (req, res) => {
 };
 
 // STEP 3 — Local Test Callback (for Postman testing)
- 
+
 exports.iciciTestCallback = async (req, res) => {
   const t = await sequelize.transaction();
 
@@ -591,7 +625,7 @@ exports.iciciTestCallback = async (req, res) => {
     if (status === "SUCCESS") {
       await order.update(
         { status: "confirmed", paymentStatus: "paid", transactionId },
-        { transaction: t }
+        { transaction: t },
       );
 
       for (const item of order.OrderItems) {
@@ -615,7 +649,7 @@ exports.iciciTestCallback = async (req, res) => {
     } else {
       await order.update(
         { status: "cancelled", paymentStatus: "failed" },
-        { transaction: t }
+        { transaction: t },
       );
     }
 
@@ -634,4 +668,3 @@ exports.iciciTestCallback = async (req, res) => {
     });
   }
 };
-
