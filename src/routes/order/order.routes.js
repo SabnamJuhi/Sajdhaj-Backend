@@ -2,6 +2,16 @@ const express = require('express');
 const router = express.Router();
 const orderController = require('../../controllers/order/order.controller');
 const { protected } = require('../../middleware/user.logout.middleware');
+const { updateOrderStatus } = require('../../controllers/ADMIN-Update Order Status API/updateOrderStatus.controller');
+const { sendDeliveryOtp } = require('../../controllers/ADMIN-Update Order Status API/sendDeliveryOtp.controller');
+const { verifyDeliveryOtp } = require('../../controllers/ADMIN-Update Order Status API/verifyDeliveryOtp.controller');
+const { getActiveOrders } = require('../../controllers/USER — My Orders API/getActiveOrders.controller');
+const { getCompletedOrders } = require('../../controllers/USER — My Orders API/getCompletedOrders.controller');
+const { cancelOrder } = require('../../controllers/USER — My Orders API/cancelOrder.controller');
+const { returnOrder } = require('../../controllers/USER — My Orders API/returnOrder.controller');
+const { completeRefund } = require('../../controllers/ADMIN-Update Order Status API/completeRefund.controller');
+
+
 
 // Create Order (Requires Login)
 router.post('/place', protected, orderController.placeOrder);
@@ -12,6 +22,19 @@ router.post('/place', protected, orderController.placeOrder);
 router.post("/payment/icici/callback", orderController.iciciReturn);
 router.post("/payment/icici/test", orderController.iciciTestCallback);
 
+
+
+//ADMIN — Update Order Status API
+router.patch("/admin/:orderNumber/status", updateOrderStatus)
+router.post("/admin/:orderNumber/send-otp", sendDeliveryOtp )
+router.post("/admin/verify-delivery-otp", verifyDeliveryOtp)
+router.post("admin/:orderNumber/refund", completeRefund)
+
+//USER — My Orders API
+router.get("/active", getActiveOrders)
+router.get("/completed", getCompletedOrders)
+router.post("/:orderNumber/cancel", cancelOrder)
+router.post("/:orderNumber/return", returnOrder)
 
 module.exports = router;
 

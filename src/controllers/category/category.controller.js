@@ -248,6 +248,43 @@ exports.deleteCategory = async (req, res) => {
 
 
 // GET ALL CATEGORIES (Nested with Sub and Product Categories)
+// exports.getAllNestedCategories = async (req, res) => {
+//   try {
+//     const categories = await Category.findAll({
+//       attributes: ["id", "name", "isActive"],
+//       include: [
+//         {
+//           model: SubCategory,
+//           as: "subcategories", // Matches 'as' in models/index.js
+//           attributes: ["id", "name", "isActive"],
+//           include: [
+//             {
+//               model: ProductCategory,
+//               as: "productCategories", // Matches 'as' in models/index.js
+//               attributes: ["id", "name", "isActive"]
+//             }
+//           ]
+//         }
+//       ],
+//       order: [["id", "ASC"]]
+//     });
+
+//     res.status(200).json({
+//       success: true,
+//       data: categories
+//     });
+//   } catch (error) {
+//     console.error("GetAllCategories Error:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch categories",
+//       error: error.message
+//     });
+//   }
+// };
+
+
+
 exports.getAllNestedCategories = async (req, res) => {
   try {
     const categories = await Category.findAll({
@@ -255,17 +292,42 @@ exports.getAllNestedCategories = async (req, res) => {
       include: [
         {
           model: SubCategory,
-          as: "subcategories", // Matches 'as' in models/index.js
+          as: "subcategories",
           attributes: ["id", "name", "isActive"],
           include: [
             {
               model: ProductCategory,
-              as: "productCategories", // Matches 'as' in models/index.js
-              attributes: ["id", "name", "isActive"]
+              as: "productCategories",
+              attributes: [
+                "id",
+                "name",
+                "isActive",
+                // COUNT of products
+                [
+                  sequelize.fn("COUNT", sequelize.col("subcategories->productCategories->Products.id")),
+                  "productCount"
+                ]
+              ],
+              include: [
+                {
+                  model: Product,
+                  as: "Products",
+                  attributes: [], // don't return product data, only count
+                  required: false
+                }
+              ]
             }
           ]
         }
       ],
+
+      //  VERY IMPORTANT for COUNT to work
+      group: [
+        "Category.id",
+        "subcategories.id",
+        "subcategories->productCategories.id"
+      ],
+
       order: [["id", "ASC"]]
     });
 
@@ -273,8 +335,9 @@ exports.getAllNestedCategories = async (req, res) => {
       success: true,
       data: categories
     });
+
   } catch (error) {
-    console.error("GetAllCategories Error:", error);
+    console.error("GetAllNestedCategories Error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to fetch categories",

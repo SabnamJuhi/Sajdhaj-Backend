@@ -321,54 +321,208 @@ exports.placeOrder = async (req, res) => {
 };
 
 /**
- * STEP 2 — ICICI Real Callback
+ * STEP 2 — ICICI REAL CALLBACK (PRODUCTION SAFE)
  */
+// exports.iciciReturn = async (req, res) => {
+//   let t;
+
+//   try {
+//     t = await sequelize.transaction();
+
+//     const { encData, checksum } = req.body;
+
+//     // 1️⃣ Basic validation
+//     if (!encData || !checksum) {
+//       throw new Error("Missing encData or checksum");
+//     }
+
+//     // 2️⃣ Verify checksum (security)
+//     const generatedChecksum = generateChecksum(
+//       encData,
+//       process.env.ICICI_CHECKSUM_KEY
+//     );
+
+//     if (generatedChecksum !== checksum) {
+//       throw new Error("Checksum mismatch");
+//     }
+
+//     // 3️⃣ Decrypt ICICI response
+//     let decrypted;
+//     try {
+//       decrypted = JSON.parse(
+//         decrypt(encData, process.env.ICICI_ENCRYPTION_KEY)
+//       );
+//     } catch (err) {
+//       throw new Error("Invalid encrypted payload");
+//     }
+
+//     const { orderNumber, transactionId, status } = decrypted;
+
+//     if (!orderNumber) {
+//       throw new Error("Invalid ICICI response: missing orderNumber");
+//     }
+
+//     // 4️⃣ Lock pending order (prevents double payment processing)
+//     const order = await Order.findOne({
+//       where: { orderNumber },
+//       include: [OrderItem],
+//       transaction: t,
+//       lock: t.LOCK.UPDATE,
+//     });
+
+//     if (!order) {
+//       throw new Error("Order not found");
+//     }
+
+//     // 🔐 Idempotency check → already processed
+//     if (order.status !== "pending") {
+//       await t.commit();
+
+//       return res.redirect(
+//         `${process.env.FRONTEND_URL}/payment-result?status=${order.paymentStatus}&order=${order.orderNumber}`
+//       );
+//     }
+
+//     // --------------------------------------------------
+//     // 5️⃣ HANDLE SUCCESS PAYMENT
+//     // --------------------------------------------------
+//     if (status === "SUCCESS") {
+//       // Update order payment info
+//       await order.update(
+//         {
+//           status: "confirmed",
+//           paymentStatus: "paid",
+//           transactionId: transactionId || null,
+//         },
+//         { transaction: t }
+//       );
+
+//       // Deduct stock safely
+//       for (const item of order.OrderItems) {
+//         // Size stock
+//         const sizeUpdated = await VariantSize.decrement("stock", {
+//           by: item.quantity,
+//           where: {
+//             id: item.sizeId,
+//             stock: { [sequelize.Op.gte]: item.quantity }, // prevent negative stock
+//           },
+//           transaction: t,
+//         });
+
+//         if (!sizeUpdated[0][1]) {
+//           throw new Error("Stock mismatch during payment confirmation");
+//         }
+
+//         // Variant total stock
+//         await ProductVariant.decrement("totalStock", {
+//           by: item.quantity,
+//           where: { id: item.variantId },
+//           transaction: t,
+//         });
+//       }
+
+//       // Clear user cart
+//       await CartItem.destroy({
+//         where: { userId: order.userId },
+//         transaction: t,
+//       });
+//     }
+
+//     // --------------------------------------------------
+//     // 6️⃣ HANDLE FAILED / CANCELLED PAYMENT
+//     // --------------------------------------------------
+//     else {
+//       await order.update(
+//         {
+//           status: "cancelled",
+//           paymentStatus: "failed",
+//           transactionId: transactionId || null,
+//         },
+//         { transaction: t }
+//       );
+//     }
+
+//     await t.commit();
+
+//     // --------------------------------------------------
+//     // 7️⃣ Redirect user to frontend result page
+//     // --------------------------------------------------
+//     return res.redirect(
+//       `${process.env.FRONTEND_URL}/payment-result?status=${order.paymentStatus}&order=${order.orderNumber}`
+//     );
+//   } catch (err) {
+//     if (t) await t.rollback();
+
+//     console.error("ICICI CALLBACK ERROR:", err.message);
+
+//     // Never expose internal error to ICICI
+//     return res.redirect(
+//       `${process.env.FRONTEND_URL}/payment-result?status=error`
+//     );
+//   }
+// };
+
 exports.iciciReturn = async (req, res) => {
   const t = await sequelize.transaction();
 
   try {
     const { encData, checksum } = req.body;
 
-    // 1️⃣ Verify checksum
+    //  Validate checksum
     const validChecksum = generateChecksum(
       encData,
-      process.env.ICICI_CHECKSUM_KEY,
+      process.env.ICICI_CHECKSUM_KEY
     );
-    if (validChecksum !== checksum) throw new Error("Invalid checksum");
 
-    // 2️⃣ Decrypt ICICI payload
+    if (validChecksum !== checksum) {
+      throw new Error("Checksum mismatch");
+    }
+
+    //  Decrypt ICICI response
     const decrypted = JSON.parse(
-      decrypt(encData, process.env.ICICI_ENCRYPTION_KEY),
+      decrypt(encData, process.env.ICICI_ENCRYPTION_KEY)
     );
 
     const { orderNumber, transactionId, status } = decrypted;
 
-    // 3️⃣ Find pending order
+    if (!orderNumber) throw new Error("Invalid ICICI payload");
+
+    // Find order safely
     const order = await Order.findOne({
-      where: { orderNumber, status: "pending" },
+      where: { orderNumber },
       include: [OrderItem],
       transaction: t,
       lock: true,
     });
 
-    if (!order) throw new Error("Order not found or already processed");
+    if (!order) throw new Error("Order not found");
 
-    // 4️⃣ SUCCESS → deduct stock from size + variant
+    // 🔐 Prevent duplicate payment processing
+    if (order.paymentStatus === "paid") {
+      await t.commit();
+      return res.redirect(`${process.env.FRONTEND_URL}/payment-success`);
+    }
+
+    // SUCCESS FLOW
     if (status === "SUCCESS") {
       await order.update(
-        { status: "confirmed", paymentStatus: "paid", transactionId },
-        { transaction: t },
+        {
+          status: "confirmed",
+          paymentStatus: "paid",
+          transactionId,
+          paidAt: new Date(),
+        },
+        { transaction: t }
       );
 
+      // 5️⃣ Deduct stock
       for (const item of order.OrderItems) {
-        // deduct size stock
         await VariantSize.decrement("stock", {
           by: item.quantity,
           where: { id: item.sizeId },
           transaction: t,
         });
 
-        // deduct variant total stock
         await ProductVariant.decrement("totalStock", {
           by: item.quantity,
           where: { id: item.variantId },
@@ -376,30 +530,45 @@ exports.iciciReturn = async (req, res) => {
         });
       }
 
-      // clear cart
+      //  Clear cart
       await CartItem.destroy({
         where: { userId: order.userId },
         transaction: t,
       });
-    } else {
-      await order.update(
-        { status: "cancelled", paymentStatus: "failed" },
-        { transaction: t },
+
+      //  Generate invoice number (simple example)
+      const invoiceNumber = `INV-${Date.now()}`;
+
+      await order.update({ invoiceNumber }, { transaction: t });
+
+      await t.commit();
+
+      //  Redirect to frontend success page
+      return res.redirect(
+        `${process.env.FRONTEND_URL}/payment-success?order=${order.orderNumber}`
       );
     }
 
+    //  FAILED PAYMENT FLOW
+    await order.update(
+      { status: "cancelled", paymentStatus: "failed" },
+      { transaction: t }
+    );
+
     await t.commit();
 
-    return res.redirect(`${process.env.FRONTEND_URL}/payment-result`);
+    return res.redirect(`${process.env.FRONTEND_URL}/payment-failed`);
   } catch (err) {
     await t.rollback();
-    return res.status(400).send("Payment verification failed");
+
+    console.error("ICICI RETURN ERROR:", err.message);
+
+    return res.redirect(`${process.env.FRONTEND_URL}/payment-error`);
   }
 };
 
-/**
- * STEP 3 — Local Test Callback (for Postman testing)
- */
+// STEP 3 — Local Test Callback (for Postman testing)
+ 
 exports.iciciTestCallback = async (req, res) => {
   const t = await sequelize.transaction();
 
