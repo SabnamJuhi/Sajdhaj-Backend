@@ -289,11 +289,13 @@ exports.getAllNestedCategories = async (req, res) => {
   try {
     const categories = await Category.findAll({
       attributes: ["id", "name", "isActive"],
+
       include: [
         {
           model: SubCategory,
           as: "subcategories",
           attributes: ["id", "name", "isActive"],
+
           include: [
             {
               model: ProductCategory,
@@ -302,46 +304,55 @@ exports.getAllNestedCategories = async (req, res) => {
                 "id",
                 "name",
                 "isActive",
-                // COUNT of products
+
+                // ✅ COUNT only ACTIVE products
                 [
-                  sequelize.fn("COUNT", sequelize.col("subcategories->productCategories->Products.id")),
-                  "productCount"
-                ]
+                  sequelize.fn(
+                    "COUNT",
+                    sequelize.col("subcategories->productCategories->Products.id")
+                  ),
+                  "productCount",
+                ],
               ],
+
               include: [
                 {
                   model: Product,
                   as: "Products",
-                  attributes: [], // don't return product data, only count
-                  required: false
-                }
-              ]
-            }
-          ]
-        }
+                  attributes: [],
+                  required: false, // keep category even if 0 active products
+                  where: {
+                    isActive: true, // ✅ ONLY ACTIVE PRODUCTS COUNTED
+                  },
+                },
+              ],
+            },
+          ],
+        },
       ],
 
-      //  VERY IMPORTANT for COUNT to work
+      // ✅ Required for aggregation to work correctly
       group: [
         "Category.id",
         "subcategories.id",
-        "subcategories->productCategories.id"
+        "subcategories->productCategories.id",
       ],
 
-      order: [["id", "ASC"]]
+      order: [["id", "ASC"]],
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      data: categories
+      data: categories,
     });
 
   } catch (error) {
     console.error("GetAllNestedCategories Error:", error);
-    res.status(500).json({
+
+    return res.status(500).json({
       success: false,
       message: "Failed to fetch categories",
-      error: error.message
+      error: error.message,
     });
   }
 };
