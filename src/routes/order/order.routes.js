@@ -15,6 +15,7 @@ const { collectCODPayment } = require('../../controllers/COD-DeliveryPaymentComp
 const { getAdminActiveOrders } = require('../../controllers/ADMIN-Get-Orders-History/getAdminActiveOrders.controller');
 const { getAdminOrderHistory } = require('../../controllers/ADMIN-Get-Orders-History/getAdminOrderHistory.controller');
 const { getOrderHistory } = require('../../controllers/USER — My Orders API/getOrderHistory.controller');
+const { addAddress, getUserAddresses, updateAddress, deleteAddress, setDefaultAddress, getAddressById } = require('../../controllers/order/Address.CRUD.controller');
 
 
 
@@ -52,6 +53,14 @@ router.patch("/admin/:orderNumber/collect-cod", collectCODPayment);
 // ADMIN — Orders viewing
 router.get("/admin/active", getAdminActiveOrders);
 router.get("/admin/history", getAdminOrderHistory);
+
+//Adress APIS
+router.post("/user/address", protected, addAddress);
+router.get("/user/address", protected, getUserAddresses);
+router.get("/user/address/:id", protected, getAddressById)
+router.put("/user/address/:id", protected, updateAddress);
+router.delete("/user/address/:id", protected, deleteAddress);
+router.patch("/user/address/default/:id", protected, setDefaultAddress);
 
 
 module.exports = router;

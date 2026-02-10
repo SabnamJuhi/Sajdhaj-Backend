@@ -173,6 +173,7 @@ const {
   VariantSize,
   sequelize,
 } = require("../../models");
+const UserAddress = require("../../models/orders/userAddress.model"); 
 
 const { generateOrderNumber } = require("../../utils/helpers");
 const {
@@ -191,9 +192,26 @@ exports.placeOrder = async (req, res) => {
     t = await sequelize.transaction();
 
     const userId = req.user.id;
-    const { shippingAddress, paymentMethod } = req.body;
+    const { addressId, paymentMethod } = req.body;
 
-    // 1️⃣ Fetch cart with full relations
+    if (!addressId) {
+      throw new Error("Address is required to place order");
+    }
+
+    /**
+     *  Fetch selected user address
+     */
+    const userAddress = await UserAddress.findOne({
+      where: { id: addressId, userId },
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    });
+
+    if (!userAddress) {
+      throw new Error("Invalid address selected");
+    }
+
+    //  Fetch cart with full relations
     const cartItems = await CartItem.findAll({
       where: { userId },
       include: [
@@ -206,12 +224,12 @@ exports.placeOrder = async (req, res) => {
         { model: VariantSize, as: "variantSize" },
       ],
       transaction: t,
-      lock: t.LOCK.UPDATE, // 🔒 prevent race condition
+      lock: t.LOCK.UPDATE, //  prevent race condition
     });
 
     if (!cartItems.length) throw new Error("Cart is empty");
 
-    // 2️⃣ Calculate subtotal + validate stock
+    //  Calculate subtotal + validate stock
     let subtotal = 0;
 
     for (const item of cartItems) {
@@ -240,7 +258,7 @@ exports.placeOrder = async (req, res) => {
     const shippingFee = subtotal > 5000 ? 0 : 150;
     const totalAmount = subtotal + taxAmount + shippingFee;
 
-    // // 3️⃣ Create Order
+    // //  Create Order
     // const order = await Order.create(
     //   {
     //     userId,
@@ -256,7 +274,7 @@ exports.placeOrder = async (req, res) => {
     //   { transaction: t },
     // );
 
-    // 3️⃣ Create Order
+    //  Create Order
     const isCOD = paymentMethod === "COD";
 
     const order = await Order.create(
@@ -276,13 +294,13 @@ exports.placeOrder = async (req, res) => {
       { transaction: t },
     );
 
-    // 4️⃣ Create Order Items
+    //  Create Order Items
     const orderItems = cartItems.map((item) => ({
       orderId: order.id,
       productId: item.productId,
       variantId: item.variantId,
       sizeId: item.sizeId,
-      // 🔹 REQUIRED SNAPSHOT FIELDS
+      // REQUIRED SNAPSHOT FIELDS
       productName: item.product.title,
       variantColor: item.variant.colorName,
       sizeLabel: item.variantSize.size,
@@ -294,18 +312,31 @@ exports.placeOrder = async (req, res) => {
 
     await OrderItem.bulkCreate(orderItems, { transaction: t });
 
-    // 5️⃣ Save Address
+    /**
+     *  Save immutable OrderAddress snapshot
+     */
     await OrderAddress.create(
-      { orderId: order.id, ...shippingAddress },
-      { transaction: t },
+      {
+        orderId: order.id,
+        fullName: userAddress.fullName,
+        email: userAddress.email,
+        phoneNumber: userAddress.phoneNumber,
+        addressLine: userAddress.addressLine,
+        country: userAddress.country,
+        city: userAddress.city,
+        state: userAddress.state,
+        zipCode: userAddress.zipCode
+        // shippingType: userAddress.shippingType,
+      },
+      { transaction: t }
     );
 
-    // ✅ Commit BEFORE payment gateway
+    // Commit BEFORE payment gateway
     await t.commit();
 
     /**
      * ==========================================
-     * 💵 CASH ON DELIVERY FLOW
+     *  CASH ON DELIVERY FLOW
      * ==========================================
      */
     if (paymentMethod === "COD") {
@@ -321,7 +352,7 @@ exports.placeOrder = async (req, res) => {
     }
 
     // --------------------------------------------------
-    // 🏦 ICICI PAYMENT INIT
+    //  ICICI PAYMENT INIT
     // --------------------------------------------------
     const paymentData = {
       merchantId: process.env.ICICI_MERCHANT_ID,
@@ -531,7 +562,7 @@ exports.iciciReturn = async (req, res) => {
 
     if (!order) throw new Error("Order not found");
 
-    // 🔐 Prevent duplicate payment processing
+    // Prevent duplicate payment processing
     if (order.paymentStatus === "paid") {
       await t.commit();
       return res.redirect(`${process.env.FRONTEND_URL}/payment-success`);
@@ -549,7 +580,7 @@ exports.iciciReturn = async (req, res) => {
         { transaction: t },
       );
 
-      // 5️⃣ Deduct stock
+      //  Deduct stock
       for (const item of order.OrderItems) {
         await VariantSize.decrement("stock", {
           by: item.quantity,

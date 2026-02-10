@@ -29,6 +29,12 @@ const CartItem = require("./orders/cart.model");
 const Order = require('./orders/order.model');
 const OrderItem = require('./orders/orderItem.model');
 const OrderAddress = require('./orders/orderAddress.model');
+const UserAddress = require("./orders/userAddress.model")
+
+
+
+
+
 
 
 // SubCategory Relations
@@ -134,6 +140,10 @@ OrderItem.belongsTo(ProductVariant, { foreignKey: "variantId" });
 // OrderItem → VariantSize
 VariantSize.hasMany(OrderItem, { foreignKey: "sizeId" });
 OrderItem.belongsTo(VariantSize, { foreignKey: "sizeId" });
+
+User.hasMany(UserAddress, { foreignKey: "userId", as: "addresses" });
+UserAddress.belongsTo(User, { foreignKey: "userId" });
+
 
 
 module.exports = {
