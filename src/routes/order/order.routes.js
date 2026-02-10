@@ -12,6 +12,9 @@ const { returnOrder } = require('../../controllers/USER — My Orders API/return
 const { completeRefund } = require('../../controllers/ADMIN-Update Order Status API/completeRefund.controller');
 const { markDeliveredCOD } = require('../../controllers/COD-DeliveryPaymentCompletion APIs/markDeliveredCOD.controller');
 const { collectCODPayment } = require('../../controllers/COD-DeliveryPaymentCompletion APIs/collectCODPayment.controller');
+const { getAdminActiveOrders } = require('../../controllers/ADMIN-Get-Orders-History/getAdminActiveOrders.controller');
+const { getAdminOrderHistory } = require('../../controllers/ADMIN-Get-Orders-History/getAdminOrderHistory.controller');
+const { getOrderHistory } = require('../../controllers/USER — My Orders API/getOrderHistory.controller');
 
 
 
@@ -35,6 +38,7 @@ router.post("/admin/:orderNumber/refund", completeRefund)
 //USER — My Orders API
 router.get("/active", protected,getActiveOrders)
 router.get("/completed",protected,  getCompletedOrders)
+router.get("/history", protected,  getOrderHistory)
 
 //cancel/return
 router.post("/:orderNumber/cancel", cancelOrder)
@@ -43,6 +47,12 @@ router.post("/:orderNumber/return", returnOrder)
 // COD flow
 router.patch("/admin/:orderNumber/mark-delivered", markDeliveredCOD);
 router.patch("/admin/:orderNumber/collect-cod", collectCODPayment);
+
+//Admin-get-Orders
+// ADMIN — Orders viewing
+router.get("/admin/active", getAdminActiveOrders);
+router.get("/admin/history", getAdminOrderHistory);
+
 
 module.exports = router;
 

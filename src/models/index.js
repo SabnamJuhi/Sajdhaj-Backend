@@ -124,6 +124,18 @@ CartItem.belongsTo(VariantSize, { foreignKey: "sizeId", as: "variantSize" });
 VariantSize.hasMany(CartItem, { foreignKey: "sizeId", as: "cartItems" });
 
 
+
+// --- ORDER ITEM PRODUCT VARIANT RELATIONS (MISSING FIX) ---
+
+// OrderItem → ProductVariant
+ProductVariant.hasMany(OrderItem, { foreignKey: "variantId" });
+OrderItem.belongsTo(ProductVariant, { foreignKey: "variantId" });
+
+// OrderItem → VariantSize
+VariantSize.hasMany(OrderItem, { foreignKey: "sizeId" });
+OrderItem.belongsTo(VariantSize, { foreignKey: "sizeId" });
+
+
 module.exports = {
   sequelize,
   Category,

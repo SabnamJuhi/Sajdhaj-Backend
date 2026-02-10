@@ -1,14 +1,43 @@
-// const { Order } = require("../../models");
+// const { Order, OrderAddress, OrderItem, User } = require("../../models");
 
-// exports.getCompletedOrders = async (req, res) => {
-// const orders = await Order.findAll({
-// where: { userId: req.user.id, status: "delivered" },
-// order: [["createdAt", "DESC"]],
-// });
+// exports.getAdminOrderHistory = async (req, res) => {
+//   try {
+//     const orders = await Order.findAll({
+//       where: {
+//         status: ["delivered", "completed", "cancelled", "refunded"],
+//       },
+//       include: [
+//         {
+//           model: OrderAddress,
+//           as: "address", // ✅ REQUIRED
+//         },
+//         {
+//           model: OrderItem,
+//         },
+//         {
+//           model: User,
+//           attributes: ["id", "userName", "email"],
+//         },
+//       ],
+//       order: [["createdAt", "DESC"]],
+//     });
 
-
-// res.json({ success: true, data: orders });
+//     res.json({
+//       success: true,
+//       total: orders.length,
+//       data: orders,
+//     });
+//   } catch (err) {
+//     res.status(500).json({
+//       success: false,
+//       message: err.message,
+//     });
+//   }
 // };
+
+
+
+
 
 
 
@@ -16,6 +45,7 @@ const {
   Order,
   OrderAddress,
   OrderItem,
+  User,
   Product,
   ProductPrice,
   ProductVariant,
@@ -23,17 +53,20 @@ const {
   VariantSize,
 } = require("../../models");
 
-exports.getCompletedOrders = async (req, res) => {
+exports.getAdminOrderHistory = async (req, res) => {
   try {
     const orders = await Order.findAll({
       where: {
-        userId: req.user.id,
-        status: "delivered",
+        status: ["delivered", "completed", "cancelled", "refunded"],
       },
       include: [
         {
           model: OrderAddress,
           as: "address",
+        },
+        {
+          model: User,
+          attributes: ["id", "userName", "email"],
         },
         {
           model: OrderItem,
@@ -83,8 +116,13 @@ exports.getCompletedOrders = async (req, res) => {
         status: order.status,
         createdAt: order.createdAt,
 
-        address: order.address,
+        customer: {
+          id: order.User?.id,
+          name: order.User?.userName,
+          email: order.User?.email,
+        },
 
+        address: order.address,
         items,
       };
     });
