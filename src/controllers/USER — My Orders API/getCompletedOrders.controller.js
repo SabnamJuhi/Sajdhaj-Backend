@@ -1,3 +1,5 @@
+const { Order } = require("../../models");
+
 exports.getCompletedOrders = async (req, res) => {
 const orders = await Order.findAll({
 where: { userId: req.user.id, status: "delivered" },

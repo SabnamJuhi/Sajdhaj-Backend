@@ -1,3 +1,5 @@
+const { Order } = require("../../models");
+
 exports.collectCODPayment = async (req, res) => {
   try {
     const { orderNumber } = req.body;

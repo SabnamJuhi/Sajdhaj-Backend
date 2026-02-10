@@ -1,3 +1,5 @@
+const { Order } = require("../../models");
+
 exports.markDeliveredCOD = async (req, res) => {
   try {
     const { orderNumber } = req.body;

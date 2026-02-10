@@ -10,6 +10,8 @@ const { getCompletedOrders } = require('../../controllers/USER — My Orders API
 const { cancelOrder } = require('../../controllers/USER — My Orders API/cancelOrder.controller');
 const { returnOrder } = require('../../controllers/USER — My Orders API/returnOrder.controller');
 const { completeRefund } = require('../../controllers/ADMIN-Update Order Status API/completeRefund.controller');
+const { markDeliveredCOD } = require('../../controllers/COD-DeliveryPaymentCompletion APIs/markDeliveredCOD.controller');
+const { collectCODPayment } = require('../../controllers/COD-DeliveryPaymentCompletion APIs/collectCODPayment.controller');
 
 
 
@@ -28,15 +30,32 @@ router.post("/payment/icici/test", orderController.iciciTestCallback);
 router.patch("/admin/:orderNumber/status", updateOrderStatus)
 router.post("/admin/:orderNumber/send-otp", sendDeliveryOtp )
 router.post("/admin/verify-delivery-otp", verifyDeliveryOtp)
-router.post("admin/:orderNumber/refund", completeRefund)
+router.post("/admin/:orderNumber/refund", completeRefund)
 
 //USER — My Orders API
-router.get("/active", getActiveOrders)
-router.get("/completed", getCompletedOrders)
+router.get("/active", protected,getActiveOrders)
+router.get("/completed",protected,  getCompletedOrders)
+
+//cancel/return
 router.post("/:orderNumber/cancel", cancelOrder)
 router.post("/:orderNumber/return", returnOrder)
 
+// COD flow
+router.patch("/admin/:orderNumber/mark-delivered", markDeliveredCOD);
+router.patch("/admin/:orderNumber/collect-cod", collectCODPayment);
+
 module.exports = router;
+
+
+
+
+
+// 1. User creates order → status: pending, paymentStatus: unpaid
+// 2. ICICI success → status: confirmed, paymentStatus: paid
+// 3. Admin ships → status: shipped
+// 4. Delivered → status: delivered + OTP sent
+// 5. OTP verified → status: completed
+
 
 
 

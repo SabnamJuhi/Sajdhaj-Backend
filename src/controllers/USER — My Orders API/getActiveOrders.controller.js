@@ -1,3 +1,5 @@
+const { Order } = require("../../models");
+
 exports.getActiveOrders = async (req, res) => {
 const orders = await Order.findAll({
 where: {

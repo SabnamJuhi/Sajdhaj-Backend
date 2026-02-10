@@ -112,8 +112,8 @@ Order.belongsTo(User, { foreignKey: "userId" });
 Order.hasMany(OrderItem, { foreignKey: "orderId", onDelete: "CASCADE" });
 OrderItem.belongsTo(Order, { foreignKey: "orderId" });
 
-Order.hasOne(OrderAddress, { foreignKey: "orderId", onDelete: "CASCADE" });
-OrderAddress.belongsTo(Order, { foreignKey: "orderId" });
+Order.hasOne(OrderAddress, { foreignKey: "orderId", as: "address", onDelete: "CASCADE" });
+OrderAddress.belongsTo(Order, { foreignKey: "orderId", as: "order", });
 
 // Important for historical tracking
 Product.hasMany(OrderItem, { foreignKey: "productId", onDelete: "CASCADE" });
