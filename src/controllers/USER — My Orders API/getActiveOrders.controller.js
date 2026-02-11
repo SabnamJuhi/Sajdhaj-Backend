@@ -155,9 +155,7 @@ exports.getActiveOrders = async (req, res) => {
       order: [["createdAt", "DESC"]],
     });
 
-    /**
-     * 🔹 Format response SAME as admin APIs
-     */
+    // Format response SAME as admin APIs
     const formattedOrders = orders.map((order) => {
       const items = order.OrderItems.map((item) => {
         const sellingPrice = item.Product?.price?.sellingPrice || 0;
@@ -180,9 +178,7 @@ exports.getActiveOrders = async (req, res) => {
       });
 
       return {
-        /**
-         * 🆕 FULL ORDER TABLE DETAILS
-         */
+        // FULL ORDER TABLE DETAILS
         orderDetails: {
           id: order.id,
           orderNumber: order.orderNumber,
@@ -211,14 +207,9 @@ exports.getActiveOrders = async (req, res) => {
           userId: order.userId,
         },
 
-        /**
-         * 📍 ADDRESS SNAPSHOT
-         */
+        // ADDRESS SNAPSHOT
         address: order.address,
-
-        /**
-         * 🛒 ITEMS
-         */
+        //  ITEMS
         items,
       };
     });

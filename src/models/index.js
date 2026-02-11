@@ -31,7 +31,8 @@ const OrderItem = require('./orders/orderItem.model');
 const OrderAddress = require('./orders/orderAddress.model');
 const UserAddress = require("./orders/userAddress.model")
 
-
+//wishlist
+const Wishlist = require("./wishlist.model");
 
 
 
@@ -145,6 +146,17 @@ User.hasMany(UserAddress, { foreignKey: "userId", as: "addresses" });
 UserAddress.belongsTo(User, { foreignKey: "userId" });
 
 
+//wishlist
+
+User.hasMany(Wishlist, { foreignKey: "userId" });
+Wishlist.belongsTo(User, { foreignKey: "userId" });
+
+Product.hasMany(Wishlist, { foreignKey: "productId" });
+Wishlist.belongsTo(Product, { foreignKey: "productId" });
+
+ProductVariant.hasMany(Wishlist, { foreignKey: "variantId" });
+Wishlist.belongsTo(ProductVariant, { foreignKey: "variantId" });
+
 
 module.exports = {
   sequelize,
@@ -168,4 +180,5 @@ module.exports = {
   Order, 
   OrderItem, 
   OrderAddress,
+  Wishlist
 }
