@@ -24,7 +24,7 @@ app.use("/api/products", require("./routes/products/product.routes"))
 app.use("/api/productSpec", require("./routes/products/productSpec.routes"))
 app.use("/api/reviews", require("./routes/products/review.routes"))
 app.use("/api/ratings", require("./routes/products/rating.routes"))
-app.use("/api/prices", require("./routes/products/price.routes"))
+app.use("/api/prices", require("./routes/products/price.routes"))  
 
 app.use("/api/variants", require("./routes/variants/productVariant.routes"))
 
