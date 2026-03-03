@@ -12,7 +12,8 @@ ProductPrice.init(
     },
     productId: {
       type: DataTypes.INTEGER,
-      allowNull: false
+      allowNull: false,
+      unique: true
     },
     mrp: {
       type: DataTypes.FLOAT,

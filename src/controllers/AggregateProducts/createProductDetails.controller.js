@@ -8,7 +8,6 @@ const VariantImage = require("../../models/productVariants/variantImage.model");
 const VariantSize = require("../../models/productVariants/variantSize.model");
 const OfferApplicableProduct = require("../../models/offers/offerApplicableProduct.model");
 
-
 /* ---------------- SAFE JSON PARSER ---------------- */
 const parseJSON = (data, fieldName) => {
   try {
@@ -96,7 +95,7 @@ exports.createProduct = async (req, res) => {
     );
 
     /* ---------------- PRICE ---------------- */
-    await ProductPrice.create(
+    await ProductPrice.upsert(
       {
         productId: product.id,
         mrp: parsedPrice.mrp,

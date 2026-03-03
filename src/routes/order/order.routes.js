@@ -29,7 +29,7 @@ const { getAddressWithGoogleLink } = require("../../controllers/order/google.add
 // router.post("/verifyPayment", protected, orderController.verifyRazorpayPayment,);
 
 
-
+router.post("/place", protected, orderController.placeOrder);
 router.post("/payment/icici/callback", orderController.iciciReturn);
 router.post("/payment/icici/test", orderController.iciciTestCallback);
 
@@ -63,7 +63,7 @@ router.get("/completed", protected, getCompletedOrders);
 router.get("/history", protected, getOrderHistory);
 
 //cancel/return
-// router.post("/:orderNumber/cancel", protected, cancelOrder);
+router.post("/:orderNumber/cancel", protected, cancelOrder);
 router.post("/:orderNumber/return", returnOrder);
 router.post("/admin/:orderNumber/refund", completeRefund);
 

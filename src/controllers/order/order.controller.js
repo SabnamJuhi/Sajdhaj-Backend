@@ -1,32 +1,12 @@
-// const crypto = require("crypto");
-// const {
-//   Order,
-//   OrderItem,
-//   OrderAddress,
-//   CartItem,
-//   Product,
-//   ProductPrice,
-//   ProductVariant,
-//   VariantSize,
-//   sequelize,
-// } = require("../../models");
 
-// const UserAddress = require("../../models/orders/userAddress.model");
-// const { generateOrderNumber } = require("../../utils/helpers");
 
-// const Razorpay = require("razorpay");
 
-// const razorpay = new Razorpay({
-//   key_id: process.env.RAZORPAY_KEY_ID,
-//   key_secret: process.env.RAZORPAY_KEY_SECRET,
-// });
 // // const { generateInvoice } = require("../../utils/generateInvoice");
 // const { sendInvoiceEmail } = require("../../utils/email");
 
 // function generateOtp() {
 //   return Math.floor(1000 + Math.random() * 9000).toString(); // 4-digit OTP
 // }
-
 
 // exports.placeOrder = async (req, res) => {
 //   let t;
@@ -360,7 +340,6 @@
 //   }
 // };
 
-
 // exports.razorpayWebhook = async (req, res) => {
 //   const event = JSON.parse(req.body.toString());
 
@@ -600,13 +579,7 @@
 //   }
 // };
 
-
-
-
-
-
-
-
+const { Op } = require("sequelize");
 const {
   Order,
   OrderItem,
@@ -616,36 +589,228 @@ const {
   ProductPrice,
   ProductVariant,
   VariantSize,
+  Offer,
+  OfferSub,
+  OfferApplicableProduct,
   sequelize,
+  Coupon,
 } = require("../../models");
-const UserAddress = require("../../models/orders/userAddress.model"); 
-
+const UserAddress = require("../../models/orders/userAddress.model");
+const { calculateCartDiscount } = require("../../services/discount.service");
 const { generateOrderNumber } = require("../../utils/helpers");
 const {
   encrypt,
   decrypt,
   generateChecksum,
 } = require("../../utils/iciciCrypto");
+const CartCoupon = require("../../models/offers/cartCoupon.model");
 
 /**
  * STEP 1 — Place Order & Generate ICICI Payment Payload
  */
+// exports.placeOrder = async (req, res) => {
+//   let t;
+
+//   try {
+//     t = await sequelize.transaction();
+
+//     const userId = req.user.id;
+//     const { addressId, paymentMethod, couponCode } = req.body;
+
+//     if (!addressId) {
+//       throw new Error("Address is required to place order");
+//     }
+
+//     const userAddress = await UserAddress.findOne({
+//       where: { id: addressId, userId },
+//       transaction: t,
+//       lock: t.LOCK.UPDATE,
+//     });
+
+//     if (!userAddress) {
+//       throw new Error("Invalid address selected");
+//     }
+
+//     const cartItems = await CartItem.findAll({
+//       where: { userId },
+//       include: [
+//         {
+//           model: Product,
+//           as: "product",
+//           include: [{ model: ProductPrice, as: "price" }],
+//         },
+//         { model: ProductVariant, as: "variant" },
+//         { model: VariantSize, as: "variantSize" },
+//       ],
+//       transaction: t,
+//       lock: t.LOCK.UPDATE,
+//     });
+
+//     if (!cartItems.length) throw new Error("Cart is empty");
+
+//     // ✅ Calculate discount
+//     const discountResult = await calculateCartDiscount(cartItems, couponCode);
+
+//     const {
+//       totalOriginalAmount,
+//       productOfferDiscount,
+//       couponDiscount,
+//       finalPayableAmount,
+//     } = discountResult;
+
+//     const taxAmount = Math.round(finalPayableAmount * 0.12);
+//     const shippingFee = finalPayableAmount > 5000 ? 0 : 150;
+
+//     const grandTotal = finalPayableAmount + taxAmount + shippingFee;
+
+//     const isCOD = paymentMethod === "COD"; // ✅ FIXED
+
+//     // ✅ Create Order
+//     const order = await Order.create(
+//       {
+//         userId,
+//         orderNumber: generateOrderNumber(),
+
+//         totalOriginalAmount,
+//         productOfferDiscount,
+//         couponDiscount,
+
+//         subtotal: finalPayableAmount,
+//         taxAmount,
+//         shippingFee,
+
+//         totalAmount: grandTotal,
+//         finalPayableAmount: grandTotal,
+
+//         appliedCouponCode: couponCode || null,
+
+//         status: isCOD ? "confirmed" : "pending",
+//         paymentMethod,
+//         paymentStatus: "unpaid",
+//       },
+//       { transaction: t },
+//     );
+
+//     // ✅ Create Order Items
+//     const orderItems = cartItems.map((item) => ({
+//       orderId: order.id,
+//       productId: item.productId,
+//       variantId: item.variantId,
+//       sizeId: item.sizeId,
+
+//       productName: item.product.title,
+//       variantColor: item.variant.colorName,
+//       sizeLabel: item.variantSize.size,
+
+//       quantity: item.quantity,
+//       priceAtPurchase: item.product.price.sellingPrice,
+//       totalPrice: item.product.price.sellingPrice * item.quantity,
+//     }));
+
+//     await OrderItem.bulkCreate(orderItems, { transaction: t });
+
+//     await OrderAddress.create(
+//       {
+//         orderId: order.id,
+//         fullName: userAddress.fullName,
+//         email: userAddress.email,
+//         phoneNumber: userAddress.phoneNumber,
+//         addressLine: userAddress.addressLine,
+//         country: userAddress.country,
+//         city: userAddress.city,
+//         state: userAddress.state,
+//         zipCode: userAddress.zipCode,
+//       },
+//       { transaction: t },
+//     );
+//     if (isCOD) {
+//       for (const item of orderItems) {
+//         await VariantSize.decrement("stock", {
+//           by: item.quantity,
+//           where: { id: item.sizeId },
+//           transaction: t,
+//         });
+
+//         await ProductVariant.decrement("totalStock", {
+//           by: item.quantity,
+//           where: { id: item.variantId },
+//           transaction: t,
+//         });
+//       }
+
+//       // Clear Cart
+//       await CartItem.destroy({
+//         where: { userId },
+//         transaction: t,
+//       });
+//     }
+
+//     await t.commit();
+
+//     // ================= COD FLOW =================
+//     if (isCOD) {
+//       return res.status(200).json({
+//         success: true,
+//         message: "Order placed successfully with Cash on Delivery",
+//         orderNumber: order.orderNumber,
+//         totalAmount: grandTotal, // ✅ FIXED
+//         paymentMethod: "COD",
+//         paymentStatus: "unpaid",
+//         status: "confirmed",
+//       });
+//     }
+
+//     // ================= ICICI PAYMENT INIT =================
+//     const paymentData = {
+//       merchantId: process.env.ICICI_MERCHANT_ID,
+//       orderNumber: order.orderNumber,
+//       amount: grandTotal, // ✅ FIXED
+//       currency: "INR",
+//       returnUrl: process.env.ICICI_RETURN_URL,
+//       cancelUrl: process.env.ICICI_CANCEL_URL,
+//     };
+
+//     const payload = JSON.stringify(paymentData);
+//     const encData = encrypt(payload, process.env.ICICI_ENCRYPTION_KEY);
+//     const checksum = generateChecksum(encData, process.env.ICICI_CHECKSUM_KEY);
+
+//     return res.status(200).json({
+//       success: true,
+//       orderNumber: order.orderNumber,
+//       totalAmount: grandTotal, 
+//       paymentUrl: process.env.ICICI_PAYMENT_URL,
+//       encData,
+//       checksum,
+//     });
+//   } catch (error) {
+//     if (t && !t.finished) await t.rollback();
+
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+
+
 exports.placeOrder = async (req, res) => {
-  let t;
+  const t = await sequelize.transaction();
 
   try {
-    t = await sequelize.transaction();
-
     const userId = req.user.id;
-    const { addressId, paymentMethod } = req.body;
+    const { addressId, paymentMethod, couponCode } = req.body;
+    const now = new Date();
 
+    // Validation
     if (!addressId) {
-      throw new Error("Address is required to place order");
+      throw new Error("Address is required");
     }
 
-    /**
-     *  Fetch selected user address
-     */
+    if (!paymentMethod) {
+      throw new Error("Payment method is required");
+    }
+
+    // 1️⃣ Fetch User Address
     const userAddress = await UserAddress.findOne({
       where: { id: addressId, userId },
       transaction: t,
@@ -656,110 +821,244 @@ exports.placeOrder = async (req, res) => {
       throw new Error("Invalid address selected");
     }
 
-    //  Fetch cart with full relations
+    // 2️⃣ Fetch Cart Items
     const cartItems = await CartItem.findAll({
       where: { userId },
       include: [
         {
           model: Product,
           as: "product",
-          include: [{ model: ProductPrice, as: "price" }],
+          include: [{ model: ProductPrice, as: "price" }]
         },
         { model: ProductVariant, as: "variant" },
-        { model: VariantSize, as: "variantSize" },
+        { model: VariantSize, as: "variantSize" }
       ],
       transaction: t,
-      lock: t.LOCK.UPDATE, //  prevent race condition
+      lock: t.LOCK.UPDATE,
     });
 
-    if (!cartItems.length) throw new Error("Cart is empty");
+    if (!cartItems.length) {
+      throw new Error("Cart is empty");
+    }
 
-    //  Calculate subtotal + validate stock
-    let subtotal = 0;
-
+    // 3️⃣ Check stock availability
     for (const item of cartItems) {
-      const price = Number(item.product?.price?.sellingPrice || 0);
-      const qty = Number(item.quantity || 0);
-      const stock = Number(item.variantSize?.stock || 0);
-
-      if (!price || qty <= 0) {
-        throw new Error(`Invalid price/quantity for product ${item.productId}`);
+      const currentStock = item.variantSize?.stock || 0;
+      if (currentStock < item.quantity) {
+        throw new Error(`Insufficient stock for ${item.product?.title || 'product'}. Available: ${currentStock}`);
       }
+    }
 
-      if (stock < qty) {
-        throw new Error(
-          `Insufficient stock for ${item.product.title} (${item.variantSize.size})`,
+    // 4️⃣ Fetch Active Offers
+    const activeOffers = await Offer.findAll({
+      where: {
+        isActive: true,
+        startDate: { [Op.lte]: now },
+        endDate: { [Op.gte]: now }
+      },
+      include: [
+        { model: OfferSub, as: "subOffers" },
+        { model: OfferApplicableProduct, as: "offerApplicableProducts" }
+      ],
+      transaction: t,
+    });
+
+    // 5️⃣ Process Cart Items with Offers
+    let totalOriginalAmount = 0;
+    let productOfferDiscount = 0;
+    let subTotal = 0;
+    let totalQuantity = 0;
+    
+    // 🔥 NEW: Track eligible amount for coupon
+    let eligibleForCouponTotal = 0;
+
+    const processedItems = [];
+
+    for (let item of cartItems) {
+      const sellingPrice = Number(item.product?.price?.sellingPrice || 0);
+      const gstRate = Number(item.product?.gstRate || 0);
+      const quantity = item.quantity;
+      const currentStock = item.variantSize?.stock || 0;
+
+      const isAvailable = currentStock > 0;
+      const validQuantity = isAvailable ? Math.min(quantity, currentStock) : 0;
+
+      totalQuantity += validQuantity;
+
+      const originalAmount = sellingPrice * validQuantity;
+      totalOriginalAmount += originalAmount;
+
+      let itemDiscount = 0;
+      let offerApplied = false;
+
+      // Offer Check
+      for (let offer of activeOffers) {
+        const isProductEligible = offer.offerApplicableProducts.some(
+          p => p.productId === item.productId
         );
+
+        if (!isProductEligible) continue;
+
+        const subOffer = offer.subOffers[0];
+        if (!subOffer) continue;
+
+        if (originalAmount < subOffer.minOrderValue) continue;
+
+        if (subOffer.discountType === "PERCENTAGE") {
+          let discount = (originalAmount * subOffer.discountValue) / 100;
+          if (subOffer.maxDiscount) {
+            discount = Math.min(discount, subOffer.maxDiscount);
+          }
+          itemDiscount = discount;
+        } else if (subOffer.discountType === "FLAT") {
+          itemDiscount = subOffer.discountValue;
+        }
+
+        offerApplied = true;
+        break;
       }
 
-      subtotal += price * qty;
+      const finalAmount = originalAmount - itemDiscount;
+
+      if (isAvailable) {
+        subTotal += finalAmount;
+        productOfferDiscount += itemDiscount;
+        
+        // 🔥 Track eligible amount for coupon
+        if (!offerApplied) {
+          eligibleForCouponTotal += originalAmount;
+        }
+      }
+
+      processedItems.push({
+        productId: item.productId,
+        variantId: item.variantId,
+        sizeId: item.sizeId,
+        quantity: validQuantity,
+        sellingPrice,
+        originalAmount,
+        itemDiscount,
+        finalAmount,
+        gstRate,
+        offerApplied,
+        productName: item.product?.title || "Unknown Product",
+        variantColor: item.variant?.colorName,
+        sizeLabel: item.variantSize?.size,
+      });
     }
 
-    if (!subtotal || isNaN(subtotal)) {
-      throw new Error("Invalid subtotal calculation");
+    // 6️⃣ Calculate Coupon Discount (based on eligible items only)
+    let couponDiscount = 0;
+    let appliedCouponCode = null;
+
+    if (couponCode && eligibleForCouponTotal > 0) {
+      const coupon = await Coupon.findOne({
+        where: {
+          code: couponCode,
+          isActive: true,
+          startDate: { [Op.lte]: now },
+          endDate: { [Op.gte]: now }
+        },
+        transaction: t,
+      });
+
+      if (coupon) {
+        const minCartValue = Number(coupon.minCartValue || 0);
+        
+        // 🔥 Check min cart value on eligible items only
+        if (eligibleForCouponTotal >= minCartValue) {
+          appliedCouponCode = coupon.code;
+
+          if (coupon.discountType === "PERCENTAGE") {
+            let discount = (eligibleForCouponTotal * Number(coupon.discountValue || 0)) / 100;
+            if (coupon.maxDiscount) {
+              discount = Math.min(discount, Number(coupon.maxDiscount));
+            }
+            couponDiscount = discount;
+          } else if (coupon.discountType === "FLAT") {
+            const flatDiscount = Number(coupon.discountValue || 0);
+            couponDiscount = Math.min(flatDiscount, eligibleForCouponTotal);
+          }
+        }
+      }
     }
 
-    const taxAmount = Math.round(subtotal * 0.12);
-    const shippingFee = subtotal > 5000 ? 0 : 150;
-    const totalAmount = subtotal + taxAmount + shippingFee;
+    const finalSubTotal = subTotal - couponDiscount;
 
-    // //  Create Order
-    // const order = await Order.create(
-    //   {
-    //     userId,
-    //     orderNumber: generateOrderNumber(),
-    //     subtotal,
-    //     taxAmount,
-    //     shippingFee,
-    //     totalAmount,
-    //     status: "pending",
-    //     paymentMethod,
-    //     paymentStatus: "unpaid",
-    //   },
-    //   { transaction: t },
-    // );
+    // 7️⃣ Calculate GST (based on correct coupon allocation)
+    let taxAmount = 0;
 
-    //  Create Order
-    const isCOD = paymentMethod === "COD";
+    for (let item of processedItems) {
+      let itemAfterCoupon = item.finalAmount;
+      
+      // 🔥 Only apply coupon to eligible items proportionally
+      if (appliedCouponCode && !item.offerApplied && eligibleForCouponTotal > 0) {
+        const proportion = item.originalAmount / eligibleForCouponTotal;
+        itemAfterCoupon = item.finalAmount - (couponDiscount * proportion);
+      }
 
+      const itemTax = Math.round((itemAfterCoupon * item.gstRate) / 100);
+      taxAmount += itemTax;
+    }
+
+    // 8️⃣ Calculate Shipping Fee
+    const shippingFee = finalSubTotal > 5000 || finalSubTotal === 0 ? 0 : 150;
+    const grandTotal = finalSubTotal + taxAmount + shippingFee;
+
+    // 9️⃣ Generate Order Number
+    const orderNumber = `ORD-${Date.now()}-${userId}`;
+
+    // 🔟 Create Order
     const order = await Order.create(
       {
-        userId,
-        orderNumber: generateOrderNumber(),
-        subtotal,
-        taxAmount,
-        shippingFee,
-        totalAmount,
+        orderNumber,
+        
+        // Discount Breakup
+        totalOriginalAmount,
+        productOfferDiscount,
+        couponDiscount,
+        totalDiscount: productOfferDiscount + couponDiscount,
+        couponCode: appliedCouponCode,
 
-        // 🔹 COD vs ONLINE difference
-        status: isCOD ? "confirmed" : "pending",
+        // Amounts
+        subtotal: finalSubTotal,
+        shippingFee,
+        taxAmount,
+        totalAmount: grandTotal,
+
+        // Status
+        status: paymentMethod === "COD" ? "confirmed" : "pending",
         paymentMethod,
-        paymentStatus: isCOD ? "unpaid" : "unpaid",
+        paymentStatus: paymentMethod === "COD" ? "unpaid" : "unpaid",
+
+        // Timestamps
+        confirmedAt: paymentMethod === "COD" ? new Date() : null,
       },
-      { transaction: t },
+      { transaction: t }
     );
 
-    //  Create Order Items
-    const orderItems = cartItems.map((item) => ({
+    // 1️⃣1️⃣ Create Order Items
+    const orderItems = processedItems.map((item) => ({
       orderId: order.id,
       productId: item.productId,
       variantId: item.variantId,
       sizeId: item.sizeId,
-      // REQUIRED SNAPSHOT FIELDS
-      productName: item.product.title,
-      variantColor: item.variant.colorName,
-      sizeLabel: item.variantSize.size,
+
+      productName: item.productName,
+      variantColor: item.variantColor,
+      sizeLabel: item.sizeLabel,
 
       quantity: item.quantity,
-      priceAtPurchase: item.product.price.sellingPrice,
-      totalPrice: item.product.price.sellingPrice * item.quantity,
+      priceAtPurchase: item.sellingPrice,
+      totalPrice: item.originalAmount,
+      discountAtPurchase: item.itemDiscount,
+      finalPrice: item.finalAmount,
+      gstRate: item.gstRate,
     }));
 
     await OrderItem.bulkCreate(orderItems, { transaction: t });
 
-    /**
-     *  Save immutable OrderAddress snapshot
-     */
+    // 1️⃣2️⃣ Save Address Snapshot
     await OrderAddress.create(
       {
         orderId: order.id,
@@ -770,65 +1069,119 @@ exports.placeOrder = async (req, res) => {
         country: userAddress.country,
         city: userAddress.city,
         state: userAddress.state,
-        zipCode: userAddress.zipCode
-        // shippingType: userAddress.shippingType,
+        zipCode: userAddress.zipCode,
+        landmark: userAddress.landmark,
+        addressType: userAddress.addressType,
       },
       { transaction: t }
     );
 
-    // Commit BEFORE payment gateway
-    await t.commit();
-
-    /**
-     * ==========================================
-     *  CASH ON DELIVERY FLOW
-     * ==========================================
-     */
+    // 1️⃣3️⃣ Handle based on Payment Method
     if (paymentMethod === "COD") {
+      // Deduct stock
+      for (const item of processedItems) {
+        await VariantSize.decrement("stock", {
+          by: item.quantity,
+          where: { id: item.sizeId },
+          transaction: t,
+        });
+
+        await ProductVariant.decrement("totalStock", {
+          by: item.quantity,
+          where: { id: item.variantId },
+          transaction: t,
+        });
+      }
+
+      // Clear cart and coupon
+      await CartItem.destroy({ where: { userId }, transaction: t });
+      await CartCoupon.destroy({ where: { userId }, transaction: t });
+
+      await t.commit();
+
       return res.status(200).json({
         success: true,
-        message: "Order placed successfully with Cash on Delivery",
+        message: "Order placed successfully",
+        data: {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          totalAmount: grandTotal,
+          paymentMethod: "COD",
+          paymentStatus: "unpaid",
+          status: "confirmed",
+        },
+      });
+    } 
+    else if (paymentMethod === "ICICI") {
+      await t.commit();
+
+      const paymentData = {
+        merchantId: process.env.ICICI_MERCHANT_ID,
         orderNumber: order.orderNumber,
-        totalAmount,
-        paymentMethod: "COD",
-        paymentStatus: "unpaid",
-        status: "confirmed",
+        amount: grandTotal.toFixed(2),
+        currency: "INR",
+        returnUrl: process.env.ICICI_RETURN_URL,
+        cancelUrl: process.env.ICICI_CANCEL_URL,
+        customerName: userAddress.fullName,
+        customerEmail: userAddress.email,
+        customerMobile: userAddress.phoneNumber,
+      };
+
+      const payload = JSON.stringify(paymentData);
+      const encData = encrypt(payload, process.env.ICICI_ENCRYPTION_KEY);
+      const checksum = generateChecksum(encData, process.env.ICICI_CHECKSUM_KEY);
+
+      return res.status(200).json({
+        success: true,
+        message: "Order created, proceeding to payment",
+        data: {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          totalAmount: grandTotal,
+          paymentMethod: "ICICI",
+          paymentStatus: "unpaid",
+          status: "pending",
+          paymentDetails: {
+            paymentUrl: process.env.ICICI_PAYMENT_URL,
+            encData,
+            checksum,
+            merchantId: process.env.ICICI_MERCHANT_ID,
+          },
+        },
+      });
+    }
+    else {
+      await t.commit();
+
+      return res.status(200).json({
+        success: true,
+        message: "Order created successfully",
+        data: {
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          totalAmount: grandTotal,
+          paymentMethod,
+          paymentStatus: "unpaid",
+          status: "pending",
+        },
       });
     }
 
-    // --------------------------------------------------
-    //  ICICI PAYMENT INIT
-    // --------------------------------------------------
-    const paymentData = {
-      merchantId: process.env.ICICI_MERCHANT_ID,
-      orderNumber: order.orderNumber,
-      amount: totalAmount,
-      currency: "INR",
-      returnUrl: process.env.ICICI_RETURN_URL,
-      cancelUrl: process.env.ICICI_CANCEL_URL,
-    };
-
-    const payload = JSON.stringify(paymentData);
-    const encData = encrypt(payload, process.env.ICICI_ENCRYPTION_KEY);
-    const checksum = generateChecksum(encData, process.env.ICICI_CHECKSUM_KEY);
-
-    return res.status(200).json({
-      success: true,
-      orderNumber: order.orderNumber,
-      totalAmount,
-      paymentUrl: process.env.ICICI_PAYMENT_URL,
-      encData,
-      checksum,
-    });
   } catch (error) {
-    if (t && !t.finished) await t.rollback();
+    if (t && !t.finished) {
+      await t.rollback();
+    }
+
+    console.error("Place Order Error:", error);
 
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.message || "Something went wrong while placing order",
     });
   }
 };
+
+
 
 /**
  * STEP 2 — ICICI REAL CALLBACK (PRODUCTION SAFE)

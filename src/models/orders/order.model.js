@@ -53,7 +53,31 @@ const Order = sequelize.define(
       allowNull: false,
       unique: true,
     },
+    // --- Discount Breakup ---
+    totalOriginalAmount: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false,
+    },
 
+    productOfferDiscount: {
+      type: DataTypes.DECIMAL(10, 2),
+      defaultValue: 0.0,
+    },
+
+    couponDiscount: {
+      type: DataTypes.DECIMAL(10, 2),
+      defaultValue: 0.0,
+    },
+
+    totalDiscount: {
+      type: DataTypes.DECIMAL(10, 2),
+      defaultValue: 0.0,
+    },
+
+    couponCode: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
     // --- Amounts ---
     subtotal: {
       type: DataTypes.DECIMAL(10, 2),
@@ -90,7 +114,13 @@ const Order = sequelize.define(
 
     // --- Payment ---
     paymentStatus: {
-      type: DataTypes.ENUM("unpaid", "paid", "failed", "refund_pending", "refunded"),
+      type: DataTypes.ENUM(
+        "unpaid",
+        "paid",
+        "failed",
+        "refund_pending",
+        "refunded",
+      ),
       defaultValue: "unpaid",
     },
 

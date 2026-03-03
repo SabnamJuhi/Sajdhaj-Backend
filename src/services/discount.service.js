@@ -1,18 +1,15 @@
 const {
-  Offer,
-  OfferSub,
   OfferApplicableProduct,
-  Coupon
+  OfferSub,
 } = require("../models");
-
 const { Op } = require("sequelize");
+const Coupon = require("../models/offers/coupon.model");
 
 exports.calculateCartDiscount = async (cartItems, couponCode = null) => {
 
-  let subtotal = 0;
+  let totalOriginalAmount = 0;
   let productOfferDiscount = 0;
   let couponDiscount = 0;
-
   let eligibleForCouponTotal = 0;
 
   const processedItems = [];
@@ -21,10 +18,15 @@ exports.calculateCartDiscount = async (cartItems, couponCode = null) => {
 
     const price = Number(item.product.price.sellingPrice);
     const qty = Number(item.quantity);
-    const itemSubtotal = price * qty;
+    const originalAmount = price * qty;
 
-    // 1️⃣ Check Product Offer
-    const applicableOffer = await OfferApplicableProduct.findOne({
+    totalOriginalAmount += originalAmount;
+
+    let itemDiscount = 0;
+    let finalAmount = originalAmount;
+
+    // 🔹 1️⃣ PRODUCT OFFER CHECK
+    const offer = await OfferApplicableProduct.findOne({
       where: { productId: item.productId },
       include: [{
         model: OfferSub,
@@ -35,15 +37,12 @@ exports.calculateCartDiscount = async (cartItems, couponCode = null) => {
       }]
     });
 
-    let finalItemAmount = itemSubtotal;
-    let itemDiscount = 0;
+    if (offer && offer.OfferSub) {
 
-    if (applicableOffer && applicableOffer.OfferSub) {
-
-      const sub = applicableOffer.OfferSub;
+      const sub = offer.OfferSub;
 
       if (sub.discountType === "PERCENTAGE") {
-        itemDiscount = (itemSubtotal * sub.discountValue) / 100;
+        itemDiscount = (originalAmount * sub.discountValue) / 100;
       } else {
         itemDiscount = sub.discountValue;
       }
@@ -52,37 +51,42 @@ exports.calculateCartDiscount = async (cartItems, couponCode = null) => {
         itemDiscount = Math.min(itemDiscount, sub.maxDiscount);
       }
 
-      finalItemAmount -= itemDiscount;
+      finalAmount -= itemDiscount;
       productOfferDiscount += itemDiscount;
 
     } else {
-      // Eligible for coupon
-      eligibleForCouponTotal += itemSubtotal;
+      eligibleForCouponTotal += originalAmount;
     }
-
-    subtotal += finalItemAmount;
 
     processedItems.push({
       ...item.toJSON(),
-      itemSubtotal,
+      originalAmount,
       itemDiscount,
-      finalItemAmount
+      finalAmount,
+      offerApplied: itemDiscount > 0
     });
   }
 
-  // 2️⃣ Apply Coupon Only On Non-Offer Items
+  let subtotalAfterProductOffer =
+    totalOriginalAmount - productOfferDiscount;
+
+  // 🔹 2️⃣ COUPON APPLY ONLY ON NON-OFFER ITEMS
   if (couponCode && eligibleForCouponTotal > 0) {
 
     const coupon = await Coupon.findOne({
       where: {
         code: couponCode,
         isActive: true,
-        validFrom: { [Op.lte]: new Date() },
-        validTill: { [Op.gte]: new Date() }
+        startDate: { [Op.lte]: new Date() },
+        endDate: { [Op.gte]: new Date() }
       }
     });
 
-    if (coupon && eligibleForCouponTotal >= coupon.minCartValue) {
+    if (!coupon) {
+      throw new Error("Invalid coupon");
+    }
+
+    if (eligibleForCouponTotal >= coupon.minCartValue) {
 
       if (coupon.discountType === "PERCENTAGE") {
         couponDiscount =
@@ -95,14 +99,15 @@ exports.calculateCartDiscount = async (cartItems, couponCode = null) => {
         couponDiscount = Math.min(couponDiscount, coupon.maxDiscount);
       }
 
-      subtotal -= couponDiscount;
+      subtotalAfterProductOffer -= couponDiscount;
     }
   }
 
   return {
-    subtotal,
+    items: processedItems,
+    totalOriginalAmount,
     productOfferDiscount,
     couponDiscount,
-    processedItems
+    finalPayableAmount: subtotalAfterProductOffer
   };
 };

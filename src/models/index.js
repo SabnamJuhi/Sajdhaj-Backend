@@ -23,6 +23,8 @@ const Offer = require("./offers/offer.model")
 const OfferSub = require("./offers/offerSub.model")
 const OfferApplicableCategory = require("./offers/offerApplicableCategory.model")
 const OfferApplicableProduct = require("./offers/offerApplicableProduct.model")
+const Coupon = require("./offers/coupon.model")
+const CartCoupon = require("./offers/cartCoupon.model");
 
 //orders
 const CartItem = require("./orders/cart.model");
@@ -104,6 +106,22 @@ OfferSub.belongsTo(Offer, { foreignKey: "offerId" })
 OfferApplicableCategory.belongsTo(Offer, { foreignKey: "offerId" })
 OfferApplicableProduct.belongsTo(Offer, { foreignKey: "offerId", as: "offerDetails" });
 
+OfferApplicableProduct.belongsTo(OfferSub, {
+  foreignKey: "subOfferId"
+});
+
+OfferSub.hasMany(OfferApplicableProduct, {
+  foreignKey: "subOfferId"
+});
+CartCoupon.belongsTo(User, {
+  foreignKey: "userId",
+  as: "user",
+});
+
+CartCoupon.belongsTo(Coupon, {
+  foreignKey: "couponId",
+  as: "coupon",
+});
 
 // --- CART RELATIONS (FIXED) ---
 User.hasMany(CartItem, { foreignKey: "userId", onDelete: "CASCADE" });
@@ -182,6 +200,7 @@ module.exports = {
   OfferSub,
   OfferApplicableCategory,
   OfferApplicableProduct,
+  Coupon,
   User,
   CartItem, 
   Order, 

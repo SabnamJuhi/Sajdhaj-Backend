@@ -29,6 +29,7 @@ app.use("/api/prices", require("./routes/products/price.routes"))
 app.use("/api/variants", require("./routes/variants/productVariant.routes"))
 
 app.use("/api/offers", require("./routes/offers/offer.routes"))
+app.use("/api/coupons", require("./routes/offers/coupon.routes"));
 
 app.use("/api/aggregate", require("./routes/products/product.Agreegate.route"))
 
