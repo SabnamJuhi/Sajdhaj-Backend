@@ -6,8 +6,10 @@ const ProductSpec = require("../../models/products/productSpec.model");
 const ProductVariant = require("../../models/productVariants/productVariant.model");
 const VariantImage = require("../../models/productVariants/variantImage.model");
 const VariantSize = require("../../models/productVariants/variantSize.model");
+const { OfferApplicableProduct } = require("../../models");
 const fs = require("fs");
 const path = require("path");
+
 
 // const cloudinary = require("../../config/cloudinary");
 
@@ -290,14 +292,14 @@ exports.updateProductDetails = async (req, res) => {
       const parsedAppliedOffers = parseJSON(appliedOffers, "appliedOffers");
 
       await OfferApplicableProduct.destroy({
-        where: { productId: id },
+        where: { productId: productId },
         transaction: t,
       });
 
       if (parsedAppliedOffers.length) {
         await OfferApplicableProduct.bulkCreate(
           parsedAppliedOffers.map((o) => ({
-            productId: id,
+            productId: productId,
             offerId: o.offerId,
             subOfferId: o.subOfferId,
           })),
