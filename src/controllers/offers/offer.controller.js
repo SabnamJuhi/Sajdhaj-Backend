@@ -1172,6 +1172,86 @@ exports.getActiveOffersForFrontend = async (req, res) => {
 /**
  * GET ALL OFFERS WITH IMAGES
  */
+// exports.getAllOffersWithImages = async (req, res) => {
+//   try {
+//     const offers = await Offer.findAll({
+//       include: [
+//         {
+//           model: OfferImage,
+//           as: "images",
+//           attributes: ["id", "imageType", "imageUrl", "altText", "isPrimary"],
+//           required: false,
+//         },
+//         {
+//           model: OfferSub,
+//           as: "subOffers",
+//           required: false,
+//           include: [
+//             {
+//               model: SubOfferImage,
+//               as: "images",
+//               attributes: ["id", "imageType", "imageUrl", "altText"],
+//               required: false,
+//             },
+//           ],
+//         },
+//       ],
+//       order: [["createdAt", "DESC"]],
+//     });
+
+//     const formatted = offers.map((offer) => {
+//       const o = offer.toJSON();
+
+//       return {
+//         id: o.id,
+//         offerCode: o.offerCode,
+//         title: o.title,
+//         festival: o.festival,
+//         description: o.description,
+//         startDate: o.startDate,
+//         endDate: o.endDate,
+//         isActive: o.isActive,
+//         displayOrder: o.displayOrder,
+
+//         images: o.images?.map((img) => ({
+//           type: img.imageType,
+//           url: img.imageUrl,
+//           altText: img.altText,
+//           isPrimary: img.isPrimary,
+//         })),
+
+//         subOffers: o.subOffers?.map((sub) => ({
+//           id: sub.id,
+//           code: sub.code,
+//           title: sub.title,
+//           description: sub.description,
+//           discountType: sub.discountType,
+//           discountValue: sub.discountValue,
+//           images: sub.images?.map((img) => ({
+//             type: img.imageType,
+//             url: img.imageUrl,
+//             altText: img.altText,
+//           })),
+//         })),
+//       };
+//     });
+
+//     return res.status(200).json({
+//       success: true,
+//       count: formatted.length,
+//       data: formatted,
+//     });
+//   } catch (err) {
+//     console.error("GetAllOffersWithImages Error:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch offers",
+//       error: err.message,
+//     });
+//   }
+// };
+
+
 exports.getAllOffersWithImages = async (req, res) => {
   try {
     const offers = await Offer.findAll({
@@ -1179,7 +1259,7 @@ exports.getAllOffersWithImages = async (req, res) => {
         {
           model: OfferImage,
           as: "images",
-          attributes: ["id", "imageType", "imageUrl", "altText", "isPrimary"],
+          attributes: ["id", "imageType", "imageUrl", "altText", "isPrimary", "displayOrder"],
           required: false,
         },
         {
@@ -1190,10 +1270,22 @@ exports.getAllOffersWithImages = async (req, res) => {
             {
               model: SubOfferImage,
               as: "images",
-              attributes: ["id", "imageType", "imageUrl", "altText"],
+              attributes: ["id", "imageType", "imageUrl", "altText", "displayOrder"],
               required: false,
             },
           ],
+        },
+        {
+          model: OfferApplicableCategory,
+          as: "applicableCategories",
+          required: false,
+          attributes: ["id", "categoryId", "subCategoryId", "subOfferId"],
+        },
+        {
+          model: OfferApplicableProduct,
+          as: "offerApplicableProducts",
+          required: false,
+          attributes: ["id", "productId", "subOfferId"],
         },
       ],
       order: [["createdAt", "DESC"]],
@@ -1203,6 +1295,7 @@ exports.getAllOffersWithImages = async (req, res) => {
       const o = offer.toJSON();
 
       return {
+        // ALL OFFER FIELDS
         id: o.id,
         offerCode: o.offerCode,
         title: o.title,
@@ -1212,27 +1305,52 @@ exports.getAllOffersWithImages = async (req, res) => {
         endDate: o.endDate,
         isActive: o.isActive,
         displayOrder: o.displayOrder,
+        createdAt: o.createdAt,
+        updatedAt: o.updatedAt,
 
+        // Offer images
         images: o.images?.map((img) => ({
+          id: img.id,
           type: img.imageType,
           url: img.imageUrl,
           altText: img.altText,
           isPrimary: img.isPrimary,
-        })),
+          displayOrder: img.displayOrder,
+        })) || [],
 
+        // ALL SUB-OFFER FIELDS with their images
         subOffers: o.subOffers?.map((sub) => ({
+          // All SubOffer fields
           id: sub.id,
+          offerId: sub.offerId,
           code: sub.code,
           title: sub.title,
           description: sub.description,
           discountType: sub.discountType,
           discountValue: sub.discountValue,
+          maxDiscount: sub.maxDiscount,
+          minOrderValue: sub.minOrderValue,
+          validFrom: sub.validFrom,
+          validTill: sub.validTill,
+          priority: sub.priority,
+          createdAt: sub.createdAt,
+          updatedAt: sub.updatedAt,
+
+          // SubOffer images
           images: sub.images?.map((img) => ({
+            id: img.id,
             type: img.imageType,
             url: img.imageUrl,
             altText: img.altText,
-          })),
-        })),
+            displayOrder: img.displayOrder,
+          })) || [],
+        })) || [],
+
+        // Applicable Categories
+        applicableCategories: o.applicableCategories || [],
+
+        // Applicable Products
+        applicableProducts: o.offerApplicableProducts || [],
       };
     });
 
