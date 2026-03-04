@@ -38,6 +38,8 @@ const Wishlist = require("./wishlist.model");
 const DeliveryBoy = require("./orders/deliveryBoy.model")
 //featuured Category
 const FeaturedCategory = require("./featuredCategories/featured_categories.model")
+const OfferImage = require("./offers/offerImage.model")
+const SubOfferImage = require("./offers/subOfferImage.model")
 
 
 
@@ -106,22 +108,23 @@ OfferSub.belongsTo(Offer, { foreignKey: "offerId" })
 OfferApplicableCategory.belongsTo(Offer, { foreignKey: "offerId" })
 OfferApplicableProduct.belongsTo(Offer, { foreignKey: "offerId", as: "offerDetails" });
 
-OfferApplicableProduct.belongsTo(OfferSub, {
-  foreignKey: "subOfferId"
-});
+OfferApplicableProduct.belongsTo(OfferSub, {foreignKey: "subOfferId"});
+OfferSub.hasMany(OfferApplicableProduct, {foreignKey: "subOfferId"});
+OfferApplicableCategory.belongsTo(Category, {foreignKey: "categoryId", as: "category"});
+OfferApplicableCategory.belongsTo(SubCategory, { as: 'subCategory', foreignKey: 'subCategoryId'});
 
-OfferSub.hasMany(OfferApplicableProduct, {
-  foreignKey: "subOfferId"
-});
-CartCoupon.belongsTo(User, {
-  foreignKey: "userId",
-  as: "user",
-});
+CartCoupon.belongsTo(User, {foreignKey: "userId", as: "user"});
+CartCoupon.belongsTo(Coupon, {foreignKey: "couponId",as: "coupon"});
 
-CartCoupon.belongsTo(Coupon, {
-  foreignKey: "couponId",
-  as: "coupon",
-});
+// models/index.js or wherever you define associations
+
+// Offer associations
+Offer.hasMany(OfferImage, { as: 'images', foreignKey: 'offerId', onDelete: 'CASCADE'});
+OfferImage.belongsTo(Offer, { as: 'offer', foreignKey: 'offerId' });
+
+// SubOffer associations
+OfferSub.hasMany(SubOfferImage, {  as: 'images',  foreignKey: 'subOfferId', onDelete: 'CASCADE' });
+SubOfferImage.belongsTo(OfferSub, { as: 'subOffer', foreignKey: 'subOfferId'});
 
 // --- CART RELATIONS (FIXED) ---
 User.hasMany(CartItem, { foreignKey: "userId", onDelete: "CASCADE" });
@@ -200,6 +203,8 @@ module.exports = {
   OfferSub,
   OfferApplicableCategory,
   OfferApplicableProduct,
+  OfferImage,
+  SubOfferImage,
   Coupon,
   User,
   CartItem, 
