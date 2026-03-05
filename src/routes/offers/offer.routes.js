@@ -77,7 +77,7 @@ router.post(
 );
 
 router.get("/", adminAuthMiddleware, offerController.getAllOffers);
-router.get("/withImages", adminAuthMiddleware, offerController.getAllOffersWithImages);
+router.get("/withImages", offerController.getAllOffersWithImages);
 router.get("/:id", adminAuthMiddleware, offerController.getOffer);
 router.patch("/:id/deactivate", adminAuthMiddleware, offerController.deactivateOffer)
 // In your routes file

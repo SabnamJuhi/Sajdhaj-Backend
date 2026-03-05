@@ -9,6 +9,7 @@ router.get("/", cartCtrl.getCart);
 router.post("/add", cartCtrl.addToCart);
 router.post("/merge", cartCtrl.mergeGuestCart);
 router.post("/decrease", cartCtrl.decreaseQuantity);
-router.delete("/item",  cartCtrl.deleteCartItem)
+router.post("/increase", cartCtrl.incrementCartQuantity);
+router.delete("/item",  cartCtrl.deleteCartItem);
 
 module.exports = router;

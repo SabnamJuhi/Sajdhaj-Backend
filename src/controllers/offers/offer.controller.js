@@ -388,7 +388,11 @@ const {
   SubCategory,
   Product,
   ProductPrice,
-  ProductImage,
+  ProductCategory,
+  ProductSpec,     
+  ProductVariant,  
+  VariantImage,    
+  VariantSize, 
 } = require("../../models");
 const { Op } = require("sequelize");
 const fs = require("fs");
@@ -1172,6 +1176,7 @@ exports.getActiveOffersForFrontend = async (req, res) => {
 /**
  * GET ALL OFFERS WITH IMAGES
  */
+
 // exports.getAllOffersWithImages = async (req, res) => {
 //   try {
 //     const offers = await Offer.findAll({
@@ -1179,7 +1184,7 @@ exports.getActiveOffersForFrontend = async (req, res) => {
 //         {
 //           model: OfferImage,
 //           as: "images",
-//           attributes: ["id", "imageType", "imageUrl", "altText", "isPrimary"],
+//           attributes: ["id", "imageType", "imageUrl", "altText", "isPrimary", "displayOrder"],
 //           required: false,
 //         },
 //         {
@@ -1190,10 +1195,22 @@ exports.getActiveOffersForFrontend = async (req, res) => {
 //             {
 //               model: SubOfferImage,
 //               as: "images",
-//               attributes: ["id", "imageType", "imageUrl", "altText"],
+//               attributes: ["id", "imageType", "imageUrl", "altText", "displayOrder"],
 //               required: false,
 //             },
 //           ],
+//         },
+//         {
+//           model: OfferApplicableCategory,
+//           as: "applicableCategories",
+//           required: false,
+//           attributes: ["id", "categoryId", "subCategoryId", "subOfferId"],
+//         },
+//         {
+//           model: OfferApplicableProduct,
+//           as: "offerApplicableProducts",
+//           required: false,
+//           attributes: ["id", "productId", "subOfferId"],
 //         },
 //       ],
 //       order: [["createdAt", "DESC"]],
@@ -1203,6 +1220,7 @@ exports.getActiveOffersForFrontend = async (req, res) => {
 //       const o = offer.toJSON();
 
 //       return {
+//         // ALL OFFER FIELDS
 //         id: o.id,
 //         offerCode: o.offerCode,
 //         title: o.title,
@@ -1212,27 +1230,52 @@ exports.getActiveOffersForFrontend = async (req, res) => {
 //         endDate: o.endDate,
 //         isActive: o.isActive,
 //         displayOrder: o.displayOrder,
+//         createdAt: o.createdAt,
+//         updatedAt: o.updatedAt,
 
+//         // Offer images
 //         images: o.images?.map((img) => ({
+//           id: img.id,
 //           type: img.imageType,
 //           url: img.imageUrl,
 //           altText: img.altText,
 //           isPrimary: img.isPrimary,
-//         })),
+//           displayOrder: img.displayOrder,
+//         })) || [],
 
+//         // ALL SUB-OFFER FIELDS with their images
 //         subOffers: o.subOffers?.map((sub) => ({
+//           // All SubOffer fields
 //           id: sub.id,
+//           offerId: sub.offerId,
 //           code: sub.code,
 //           title: sub.title,
 //           description: sub.description,
 //           discountType: sub.discountType,
 //           discountValue: sub.discountValue,
+//           maxDiscount: sub.maxDiscount,
+//           minOrderValue: sub.minOrderValue,
+//           validFrom: sub.validFrom,
+//           validTill: sub.validTill,
+//           priority: sub.priority,
+//           createdAt: sub.createdAt,
+//           updatedAt: sub.updatedAt,
+
+//           // SubOffer images
 //           images: sub.images?.map((img) => ({
+//             id: img.id,
 //             type: img.imageType,
 //             url: img.imageUrl,
 //             altText: img.altText,
-//           })),
-//         })),
+//             displayOrder: img.displayOrder,
+//           })) || [],
+//         })) || [],
+
+//         // Applicable Categories
+//         applicableCategories: o.applicableCategories || [],
+
+//         // Applicable Products
+//         applicableProducts: o.offerApplicableProducts || [],
 //       };
 //     });
 
@@ -1250,7 +1293,6 @@ exports.getActiveOffersForFrontend = async (req, res) => {
 //     });
 //   }
 // };
-
 
 exports.getAllOffersWithImages = async (req, res) => {
   try {
@@ -1280,12 +1322,95 @@ exports.getAllOffersWithImages = async (req, res) => {
           as: "applicableCategories",
           required: false,
           attributes: ["id", "categoryId", "subCategoryId", "subOfferId"],
+          include: [
+            {
+              model: Category,
+              as: "category",
+              attributes: ["id", "name"],
+            },
+          ],
         },
         {
           model: OfferApplicableProduct,
           as: "offerApplicableProducts",
           required: false,
           attributes: ["id", "productId", "subOfferId"],
+          include: [
+            {
+              model: Product,
+              as: "Product", // Note: Using "Product" as per your association
+              attributes: [
+                "id",
+                "sku",
+                "title",
+                "description",
+                "brandName",
+                "badge",
+                "gstRate",
+                "isActive",
+                "createdAt",
+              ],
+              include: [
+                { 
+                  model: Category, 
+                  as: "Category", 
+                  attributes: ["id", "name"] 
+                },
+                { 
+                  model: SubCategory, 
+                  as: "SubCategory", 
+                  attributes: ["id", "name"] 
+                },
+                { 
+                  model: ProductCategory, 
+                  as: "ProductCategory", 
+                  attributes: ["id", "name"] 
+                },
+                { 
+                  model: ProductPrice, 
+                  as: "price",
+                  attributes: ["id", "mrp", "sellingPrice", "discountPercentage", "currency"] 
+                },
+                { 
+                  model: ProductSpec, 
+                  as: "specs",
+                  attributes: ["id", "specKey", "specValue"],
+                  required: false,
+                  limit: 10
+                },
+                {
+                  model: ProductVariant,
+                  as: "variants",
+                  attributes: [
+                    "id",
+                    "variantCode",
+                    "colorName",
+                    "colorCode",
+                    "colorSwatch",
+                    "totalStock",
+                    "stockStatus",
+                    "isActive",
+                  ],
+                  include: [
+                    { 
+                      model: VariantImage, 
+                      as: "images", 
+                      attributes: ["id", "imageUrl"],
+                      required: false,
+                      limit: 5
+                    },
+                    { 
+                      model: VariantSize, 
+                      as: "sizes", 
+                      attributes: ["id", "size", "stock", "chest"],
+                      required: false 
+                    },
+                  ],
+                  required: false,
+                },
+              ],
+            },
+          ],
         },
       ],
       order: [["createdAt", "DESC"]],
@@ -1320,7 +1445,6 @@ exports.getAllOffersWithImages = async (req, res) => {
 
         // ALL SUB-OFFER FIELDS with their images
         subOffers: o.subOffers?.map((sub) => ({
-          // All SubOffer fields
           id: sub.id,
           offerId: sub.offerId,
           code: sub.code,
@@ -1330,6 +1454,8 @@ exports.getAllOffersWithImages = async (req, res) => {
           discountValue: sub.discountValue,
           maxDiscount: sub.maxDiscount,
           minOrderValue: sub.minOrderValue,
+          bank: sub.bank,
+          paymentMethod: sub.paymentMethod,
           validFrom: sub.validFrom,
           validTill: sub.validTill,
           priority: sub.priority,
@@ -1346,11 +1472,65 @@ exports.getAllOffersWithImages = async (req, res) => {
           })) || [],
         })) || [],
 
-        // Applicable Categories
-        applicableCategories: o.applicableCategories || [],
+        // Applicable Categories with category details
+        applicableCategories: o.applicableCategories?.map((ac) => ({
+          id: ac.id,
+          categoryId: ac.categoryId,
+          subCategoryId: ac.subCategoryId,
+          subOfferId: ac.subOfferId,
+          category: ac.category || null,
+        })) || [],
 
-        // Applicable Products
-        applicableProducts: o.offerApplicableProducts || [],
+        // Applicable Products with FULL product details
+        applicableProducts: o.offerApplicableProducts?.map((ap) => ({
+          id: ap.id,
+          productId: ap.productId,
+          subOfferId: ap.subOfferId,
+          product: ap.Product ? {
+            id: ap.Product.id,
+            sku: ap.Product.sku,
+            title: ap.Product.title,
+            description: ap.Product.description,
+            brandName: ap.Product.brandName,
+            badge: ap.Product.badge,
+            gstRate: ap.Product.gstRate,
+            isActive: ap.Product.isActive,
+            createdAt: ap.Product.createdAt,
+            
+            // Category relations
+            category: ap.Product.Category,
+            subCategory: ap.Product.SubCategory,
+            productCategory: ap.Product.ProductCategory,
+            
+            // Price
+            price: ap.Product.price,
+            
+            // Specifications
+            specs: ap.Product.specs || [],
+            
+            // Variants with images and sizes
+            variants: ap.Product.variants?.map((variant) => ({
+              id: variant.id,
+              variantCode: variant.variantCode,
+              colorName: variant.colorName,
+              colorCode: variant.colorCode,
+              colorSwatch: variant.colorSwatch,
+              totalStock: variant.totalStock,
+              stockStatus: variant.stockStatus,
+              isActive: variant.isActive,
+              images: variant.images?.map((img) => ({
+                id: img.id,
+                imageUrl: img.imageUrl,
+              })) || [],
+              sizes: variant.sizes?.map((size) => ({
+                id: size.id,
+                size: size.size,
+                stock: size.stock,
+                chest: size.chest,
+              })) || [],
+            })) || [],
+          } : null,
+        })) || [],
       };
     });
 

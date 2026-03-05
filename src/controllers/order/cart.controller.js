@@ -344,10 +344,69 @@ exports.getCart = async (req, res) => {
   }
 };
 
+// exports.addToCart = async (req, res) => {
+//   try {
+//     const { productId, variantId, sizeId } = req.body;
+//     const userId = req.user.id;
+
+//     // Validate variant belongs to product
+//     const validVariant = await ProductVariant.findOne({
+//       where: { id: variantId, productId },
+//     });
+
+//     if (!validVariant) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid variant for this product",
+//       });
+//     }
+
+//     // Validate size belongs to variant
+//     const validSize = await VariantSize.findOne({
+//       where: { id: sizeId, variantId },
+//     });
+
+//     if (!validSize) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid size for this variant",
+//       });
+//     }
+
+//     const [item, created] = await CartItem.findOrCreate({
+//       where: { userId, productId, variantId, sizeId },
+//       defaults: { quantity: 1 },
+//     });
+
+//     if (!created) {
+//       await item.increment("quantity", { by: 1 });
+//     }
+
+//     res.json({ success: true, message: "Added to cart" });
+//   } catch (error) {
+//     res.status(500).json({ success: false, message: error.message });
+//   }
+// };
+
 exports.addToCart = async (req, res) => {
   try {
-    const { productId, variantId, sizeId } = req.body;
+    const { productId, variantId, sizeId, quantity = 1 } = req.body; // Default quantity to 1 if not provided
     const userId = req.user.id;
+
+    // Validate quantity
+    if (quantity < 1) {
+      return res.status(400).json({
+        success: false,
+        message: "Quantity must be at least 1",
+      });
+    }
+
+    if (quantity > 10) {
+      return res.status(400).json({
+        success: false,
+        message: "Maximum quantity allowed is 10",
+      });
+    }
 
     // Validate variant belongs to product
     const validVariant = await ProductVariant.findOne({
@@ -373,20 +432,158 @@ exports.addToCart = async (req, res) => {
       });
     }
 
-    const [item, created] = await CartItem.findOrCreate({
-      where: { userId, productId, variantId, sizeId },
-      defaults: { quantity: 1 },
-    });
-
-    if (!created) {
-      await item.increment("quantity", { by: 1 });
+    // Check stock availability
+    if (validSize.stock < quantity) {
+      return res.status(400).json({
+        success: false,
+        message: `Only ${validSize.stock} items available in stock`,
+      });
     }
 
-    res.json({ success: true, message: "Added to cart" });
+    // Find existing cart item
+    const existingItem = await CartItem.findOne({
+      where: { userId, productId, variantId, sizeId },
+    });
+
+    if (existingItem) {
+      // Check if adding quantity would exceed stock
+      const newQuantity = existingItem.quantity + quantity;
+      if (newQuantity > validSize.stock) {
+        return res.status(400).json({
+          success: false,
+          message: `Cannot add ${quantity} more. Only ${validSize.stock - existingItem.quantity} available`,
+        });
+      }
+
+      // Update existing item quantity
+      await existingItem.increment("quantity", { by: quantity });
+      
+      return res.json({ 
+        success: true, 
+        message: `Added ${quantity} item(s) to cart`,
+        data: {
+          cartItemId: existingItem.id,
+          newQuantity: existingItem.quantity + quantity,
+          action: 'updated'
+        }
+      });
+    } else {
+      // Create new cart item
+      const newItem = await CartItem.create({
+        userId,
+        productId,
+        variantId,
+        sizeId,
+        quantity,
+      });
+
+      return res.json({ 
+        success: true, 
+        message: `Added ${quantity} item(s) to cart`,
+        data: {
+          cartItemId: newItem.id,
+          quantity: newItem.quantity,
+          action: 'created'
+        }
+      });
+    }
+
+  } catch (error) {
+    console.error("Add to Cart Error:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message 
+    });
+  }
+};
+
+/**
+ * Increment cart item quantity by 1 (using productId, variantId, sizeId in body)
+ */
+exports.incrementCartQuantity = async (req, res) => {
+  try {
+    const { productId, variantId, sizeId } = req.body;
+    const userId = req.user.id;
+
+    // Find the cart item
+    const item = await CartItem.findOne({
+      where: { userId, productId, variantId, sizeId },
+      include: [
+        {
+          model: VariantSize,
+          as: "variantSize",
+          where: { id: sizeId },
+          attributes: ['stock']
+        }
+      ]
+    });
+
+    if (!item) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Item not found in cart" 
+      });
+    }
+
+    // Check stock availability
+    const newQuantity = item.quantity + 1;
+    
+    if (item.variantSize && item.variantSize.stock < newQuantity) {
+      return res.status(400).json({
+        success: false,
+        message: `Only ${item.variantSize.stock} items available in stock`,
+      });
+    }
+
+    // Increment quantity
+    await item.increment("quantity", { by: 1 });
+
+    res.json({ 
+      success: true, 
+      message: "Quantity increased",
+      data: {
+        cartItemId: item.id,
+        newQuantity: item.quantity + 1,
+        productId,
+        variantId,
+        sizeId
+      }
+    });
+
+  } catch (error) {
+    console.error("Increment Cart Quantity Error:", error);
+    res.status(500).json({ 
+      success: false, 
+      message: error.message 
+    });
+  }
+};
+
+
+exports.decreaseQuantity = async (req, res) => {
+  try {
+    const { productId, variantId, sizeId } = req.body;
+    const userId = req.user.id;
+
+    const item = await CartItem.findOne({
+      where: { userId, productId, variantId, sizeId },
+    });
+
+    if (!item) return res.status(404).json({ message: "Item not found" });
+
+    if (item.quantity > 1) {
+      await item.decrement("quantity", { by: 1 });
+    } else {
+      await item.destroy();
+    }
+
+    res.json({ success: true, message: "Quantity decreased" });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+
 
 exports.mergeGuestCart = async (req, res) => {
   const transaction = await CartItem.sequelize.transaction();
@@ -430,29 +627,6 @@ exports.mergeGuestCart = async (req, res) => {
     res.json({ success: true, message: "Guest cart merged" });
   } catch (error) {
     await transaction.rollback();
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-exports.decreaseQuantity = async (req, res) => {
-  try {
-    const { productId, variantId, sizeId } = req.body;
-    const userId = req.user.id;
-
-    const item = await CartItem.findOne({
-      where: { userId, productId, variantId, sizeId },
-    });
-
-    if (!item) return res.status(404).json({ message: "Item not found" });
-
-    if (item.quantity > 1) {
-      await item.decrement("quantity", { by: 1 });
-    } else {
-      await item.destroy();
-    }
-
-    res.json({ success: true, message: "Quantity decreased" });
-  } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };
