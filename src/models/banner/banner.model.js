@@ -15,6 +15,7 @@ const Banner = sequelize.define(
 
     title: { type: DataTypes.STRING, allowNull: false },
     subtitle: { type: DataTypes.TEXT, allowNull: false },
+    description: { type: DataTypes.TEXT, allowNull: true },
     cta: { type: DataTypes.STRING, allowNull: false },
     link: { type: DataTypes.STRING, allowNull: false },
 

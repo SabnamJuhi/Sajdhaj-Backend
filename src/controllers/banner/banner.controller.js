@@ -11,12 +11,13 @@ exports.createBanner = async (req, res) => {
       return res.status(400).json({ success: false, message: "Image is required" });
     }
 
-    const { title, subtitle, cta, link } = req.body;
+    const { title, subtitle, description, cta, link } = req.body;
      const imagePath = `/uploads/products/${req.file.filename}`;
 
     const banner = await Banner.create({
       title,
       subtitle,
+      description,
       cta,
       link,
       imageUrl: imagePath,
@@ -32,40 +33,29 @@ exports.createBanner = async (req, res) => {
 /* GET ALL ACTIVE BANNERS */
 exports.getAllBanners = async (req, res) => {
   try {
+    console.log("Fetching all banners...");
+    
+    // Remove the attributes array completely
     const banners = await Banner.findAll({
-      where: { isActive: true },
-      order: [["createdAt", "DESC"]],
+      order: [["createdAt", "DESC"]]
     });
 
-    res.json({ success: true, data: banners });
+    console.log(`Found ${banners.length} banners`);
+    
+    res.json({ 
+      success: true, 
+      data: banners 
+    });
+    
   } catch (err) {
-    res.status(500).json({ success: false, message: "Fetch failed" });
+    console.error("Get All Banners Error:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: "Fetch failed", 
+      error: err.message 
+    });
   }
 };
-
-
-/* UPDATE BANNER */
-// exports.updateBanner = async (req, res) => {
-//   try {
-//     const banner = await Banner.findByPk(req.params.id);
-//     if (!banner) return res.status(404).json({ success: false, message: "Banner not found" });
-
-//     // if new image uploaded → delete old from cloudinary
-//     if (req.file) {
-//       await cloudinary.uploader.destroy(banner.publicId);
-
-//       banner.imageUrl = req.file.path;
-//     }
-
-//     const { title, subtitle, cta, link, isActive } = req.body;
-
-//     await banner.update({ title, subtitle, cta, link, isActive });
-
-//     res.json({ success: true, data: banner, message: "Banner updated" });
-//   } catch (err) {
-//     res.status(500).json({ success: false, message: "Update failed" });
-//   }
-// };
 
 
 /* UPDATE BANNER */
@@ -99,11 +89,12 @@ exports.updateBanner = async (req, res) => {
       banner.imageUrl = `/uploads/products/${req.file.filename}`;
     }
 
-    const { title, subtitle, cta, link, isActive } = req.body;
+    const { title, subtitle, description, cta, link, isActive } = req.body;
 
     await banner.update({
       title,
       subtitle,
+      description,
       cta,
       link,
       isActive,
@@ -126,18 +117,59 @@ exports.updateBanner = async (req, res) => {
 
 
 /* DELETE BANNER (soft + cloudinary delete optional) */
+/* DELETE BANNER */
 exports.deleteBanner = async (req, res) => {
   try {
+    console.log("Delete banner request for ID:", req.params.id);
+    
     const banner = await Banner.findByPk(req.params.id);
-    if (!banner) return res.status(404).json({ success: false, message: "Banner not found" });
+    
+    if (!banner) {
+      console.log("Banner not found with ID:", req.params.id);
+      return res.status(404).json({ 
+        success: false, 
+        message: "Banner not found" 
+      });
+    }
 
-    // remove image from cloudinary
-    await cloudinary.uploader.destroy(banner.publicId);
+    console.log("Found banner:", banner.toJSON());
 
-    await banner.destroy(); // or use isActive false
+    // Delete image file from local storage
+    if (banner.imageUrl) {
+      const imagePath = path.join(__dirname, "../../", banner.imageUrl);
+      console.log("Attempting to delete image at:", imagePath);
+      
+      if (fs.existsSync(imagePath)) {
+        fs.unlinkSync(imagePath);
+        console.log("Image deleted successfully");
+      } else {
+        console.log("Image file not found at:", imagePath);
+      }
+    }
 
-    res.json({ success: true, message: "Banner deleted" });
+    // Delete banner from database
+    await banner.destroy();
+    console.log("Banner deleted from database");
+
+    res.json({ 
+      success: true, 
+      message: "Banner deleted successfully" 
+    });
+    
   } catch (err) {
-    res.status(500).json({ success: false, message: "Delete failed" });
+    console.error("Delete banner error details:", {
+      message: err.message,
+      name: err.name,
+      stack: err.stack,
+      code: err.code
+    });
+    
+    res.status(500).json({ 
+      success: false, 
+      message: "Delete failed",
+      error: err.message 
+    });
   }
 };
+
+

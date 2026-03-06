@@ -9,6 +9,7 @@ const {
   getAllBanners,
   updateBanner,
   deleteBanner,
+  checkBannerColumns,
 } = require("../../controllers/banner/banner.controller");
 const adminAuthMiddleware = require("../../middleware/admin.auth.middleware");
 
@@ -17,5 +18,6 @@ router.post("/", upload.single("image"), adminAuthMiddleware, createBanner);
 router.get("/", getAllBanners);
 router.put("/:id", upload.single("image"), adminAuthMiddleware, updateBanner);
 router.delete("/:id", adminAuthMiddleware, deleteBanner);
+
 
 module.exports = router;
