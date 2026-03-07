@@ -7,6 +7,7 @@ const ProductVariant = require("../../models/productVariants/productVariant.mode
 const VariantImage = require("../../models/productVariants/variantImage.model");
 const VariantSize = require("../../models/productVariants/variantSize.model");
 const OfferApplicableProduct = require("../../models/offers/offerApplicableProduct.model");
+const { calculatePrice } = require("../../services/price.service");
 
 /* ---------------- SAFE JSON PARSER ---------------- */
 const parseJSON = (data, fieldName) => {
@@ -95,19 +96,36 @@ exports.createProduct = async (req, res) => {
     );
 
     /* ---------------- PRICE ---------------- */
-    await ProductPrice.upsert(
+    // await ProductPrice.upsert(
+    //   {
+    //     productId: product.id,
+    //     mrp: parsedPrice.mrp,
+    //     sellingPrice: parsedPrice.sellingPrice,
+    //     discountPercentage:
+    //       parsedPrice.mrp > parsedPrice.sellingPrice
+    //         ? Math.round(
+    //             ((parsedPrice.mrp - parsedPrice.sellingPrice) /
+    //               parsedPrice.mrp) *
+    //               100,
+    //           )
+    //         : 0,
+    //     currency: parsedPrice.currency || "INR",
+    //   },
+    //   { transaction: t },
+    // );
+
+    const calculatedPrice = calculatePrice({
+      mrp: parsedPrice.mrp,
+      sellingPrice: parsedPrice.sellingPrice,
+      discountPercentage: parsedPrice.discountPercentage,
+    });
+
+    await ProductPrice.create(
       {
         productId: product.id,
-        mrp: parsedPrice.mrp,
-        sellingPrice: parsedPrice.sellingPrice,
-        discountPercentage:
-          parsedPrice.mrp > parsedPrice.sellingPrice
-            ? Math.round(
-                ((parsedPrice.mrp - parsedPrice.sellingPrice) /
-                  parsedPrice.mrp) *
-                  100,
-              )
-            : 0,
+        mrp: calculatedPrice.mrp,
+        sellingPrice: calculatedPrice.sellingPrice,
+        discountPercentage: calculatedPrice.discountPercentage,
         currency: parsedPrice.currency || "INR",
       },
       { transaction: t },

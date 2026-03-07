@@ -69,3 +69,36 @@ exports.upsert = async (productId, price, transaction) => {
     { transaction }
   )
 }
+
+
+exports.calculatePrice = ({ mrp, sellingPrice, discountPercentage }) => {
+  if (!mrp) {
+    throw new Error("MRP is required");
+  }
+
+  mrp = Number(mrp);
+
+  // CASE 1 → Admin gives discount %
+  if (discountPercentage !== undefined && discountPercentage !== null) {
+    discountPercentage = Number(discountPercentage);
+
+    sellingPrice = mrp - (mrp * discountPercentage) / 100;
+  }
+
+  // CASE 2 → Admin gives selling price
+  else if (sellingPrice !== undefined && sellingPrice !== null) {
+    sellingPrice = Number(sellingPrice);
+
+    discountPercentage = ((mrp - sellingPrice) / mrp) * 100;
+  }
+
+  else {
+    throw new Error("Either sellingPrice or discountPercentage must be provided");
+  }
+
+  return {
+    mrp,
+    sellingPrice: Math.round(sellingPrice),
+    discountPercentage: Math.round(discountPercentage)
+  };
+};
