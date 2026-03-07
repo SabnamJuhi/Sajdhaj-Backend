@@ -1,61 +1,32 @@
-// const { Order, OrderItem, OrderAddress } = require("../../models");
-
-// exports.getOrderHistory = async (req, res) => {
-//   try {
-//     const orders = await Order.findAll({
-//       where: {
-//         userId: req.user.id,
-//         status: ["delivered", "completed", "cancelled", "refunded"],
-//       },
-//       include: [
-//         {
-//           model: OrderItem,
-//         },
-//         {
-//           model: OrderAddress,
-//           as: "address", // use alias if defined in association
-//         },
-//       ],
-//       order: [["createdAt", "DESC"]],
-//     });
-
-//     return res.json({
-//       success: true,
-//       total: orders.length,
-//       data: orders,
-//     });
-//   } catch (err) {
-//     return res.status(500).json({
-//       success: false,
-//       message: err.message,
-//     });
-//   }
-// };
-
-
-
-
-
-
 // const {
 //   Order,
 //   OrderAddress,
 //   OrderItem,
+//   User,
 //   Product,
 //   ProductPrice,
 //   ProductVariant,
 //   VariantImage,
 //   VariantSize,
 // } = require("../../models");
+// const {
+//   getPaginationOptions,
+//   formatPagination,
+// } = require("../../utils/paginate");
 
 // exports.getOrderHistory = async (req, res) => {
 //   try {
-//     const orders = await Order.findAll({
+//     const paginationOptions = getPaginationOptions(req.query);
+//     const orders = await Order.findAndCountAll({
 //       where: {
 //         userId: req.user.id,
 //         status: ["delivered", "completed", "cancelled", "refunded"],
 //       },
 //       include: [
+//         {
+//           model: User,
+//           attributes: ["id", "userName", "email"],
+//         },
 //         {
 //           model: OrderAddress,
 //           as: "address",
@@ -65,25 +36,29 @@
 //           include: [
 //             {
 //               model: Product,
+//               attributes: ["id", "title", "sku"],
 //               include: [{ model: ProductPrice, as: "price" }],
 //             },
 //             {
 //               model: ProductVariant,
+//               attributes: ["id", "colorName"],
 //               include: [{ model: VariantImage, as: "images", limit: 1 }],
 //             },
 //             {
 //               model: VariantSize,
+//               attributes: ["id", "size"],
 //             },
 //           ],
 //         },
 //       ],
 //       order: [["createdAt", "DESC"]],
+//        distinct: true,
+//       ...paginationOptions,
 //     });
 
-//     // 🔹 Format response consistent with other order APIs
-//     const formattedOrders = orders.map((order) => {
+//     const formattedOrders = orders.rows.map((order) => {
 //       const items = order.OrderItems.map((item) => {
-//         const sellingPrice = item.Product?.price?.sellingPrice || 0;
+//         const price = item.Product?.price?.sellingPrice || 0;
 
 //         return {
 //           orderItemId: item.id,
@@ -92,32 +67,72 @@
 //           image: item.ProductVariant?.images?.[0]?.imageUrl || null,
 
 //           variant: {
-//             color: item.ProductVariant?.colorName,
-//             size: item.VariantSize?.size,
+//             color: item.ProductVariant?.colorName || null,
+//             size: item.VariantSize?.size || null,
 //           },
 
-//           price: sellingPrice,
+//           price,
 //           quantity: item.quantity,
-//           total: sellingPrice * item.quantity,
+//           total: price * item.quantity,
 //         };
 //       });
 
 //       return {
-//         orderId: order.id,
-//         orderNumber: order.orderNumber,
-//         status: order.status,
-//         createdAt: order.createdAt,
+//         // 🔹 FULL ORDER TABLE DATA
+//         orderDetails: {
+//           id: order.id,
+//           orderNumber: order.orderNumber,
+//           subtotal: order.subtotal,
+//           shippingFee: order.shippingFee,
+//           taxAmount: order.taxAmount,
+//           totalAmount: order.totalAmount,
 
-//         address: order.address,
+//           status: order.status,
+//           paymentStatus: order.paymentStatus,
+//           paymentMethod: order.paymentMethod,
+//           transactionId: order.transactionId,
 
+//           deliveryOtp: order.deliveryOtp,
+//           otpVerified: order.otpVerified,
+
+//           confirmedAt: order.confirmedAt,
+//           shippedAt: order.shippedAt,
+//           deliveredAt: order.deliveredAt,
+//           completedAt: order.completedAt,
+//           cancelledAt: order.cancelledAt,
+//           refundedAt: order.refundedAt,
+
+//           createdAt: order.createdAt,
+//           updatedAt: order.updatedAt,
+//           userId: order.userId,
+//         },
+
+//         // 🔹 CUSTOMER INFO
+//         customer: {
+//           id: order.User?.id,
+//           name: order.User?.userName,
+//           email: order.User?.email,
+//         },
+
+//         // 🔹 ADDRESS
+//         address: order.address || null,
+
+//         // 🔹 ITEMS
 //         items,
 //       };
 //     });
+//  const response = formatPagination(
+//       {
+//         count: orders.count,
+//         rows: formattedOrders,
+//       },
+//       paginationOptions.currentPage,
+//       paginationOptions.limit
+//     );
 
 //     return res.json({
 //       success: true,
-//       total: formattedOrders.length,
-//       data: formattedOrders,
+//       ...response,
 //     });
 //   } catch (err) {
 //     return res.status(500).json({
@@ -129,11 +144,14 @@
 
 
 
+
+
+// controllers/orders/getOrderHistory.controller.js
+
 const {
   Order,
   OrderAddress,
   OrderItem,
-  User,
   Product,
   ProductPrice,
   ProductVariant,
@@ -148,71 +166,105 @@ const {
 exports.getOrderHistory = async (req, res) => {
   try {
     const paginationOptions = getPaginationOptions(req.query);
+    
     const orders = await Order.findAndCountAll({
       where: {
         userId: req.user.id,
-        status: ["delivered", "completed", "cancelled", "refunded"],
+        status: ["delivered", "completed", "cancelled", "returned", "refunded"],
       },
       include: [
         {
-          model: User,
-          attributes: ["id", "userName", "email"],
-        },
-        {
           model: OrderAddress,
           as: "address",
+          // Don't specify attributes - let Sequelize select all
         },
         {
           model: OrderItem,
+          as: "OrderItems",
           include: [
             {
               model: Product,
-              attributes: ["id", "title", "sku"],
-              include: [{ model: ProductPrice, as: "price" }],
+              as: "Product",
+              attributes: ["id", "title", "sku", "brandName"],
+              include: [
+                { 
+                  model: ProductPrice, 
+                  as: "price", 
+                  attributes: ["sellingPrice", "mrp", "discountPercentage"] 
+                }
+              ],
             },
             {
               model: ProductVariant,
-              attributes: ["id", "colorName"],
-              include: [{ model: VariantImage, as: "images", limit: 1 }],
+              as: "ProductVariant",
+              attributes: ["id", "colorName", "colorCode"],
+              include: [
+                { 
+                  model: VariantImage, 
+                  as: "images", 
+                  attributes: ["id", "imageUrl"],
+                  limit: 1 
+                }
+              ],
             },
             {
               model: VariantSize,
+              as: "VariantSize",
               attributes: ["id", "size"],
             },
           ],
         },
       ],
       order: [["createdAt", "DESC"]],
-       distinct: true,
+      distinct: true,
       ...paginationOptions,
     });
 
     const formattedOrders = orders.rows.map((order) => {
-      const items = order.OrderItems.map((item) => {
-        const price = item.Product?.price?.sellingPrice || 0;
-
-        return {
-          orderItemId: item.id,
-          productId: item.productId,
-          title: item.Product?.title || "Unknown Product",
-          image: item.ProductVariant?.images?.[0]?.imageUrl || null,
-
-          variant: {
-            color: item.ProductVariant?.colorName || null,
-            size: item.VariantSize?.size || null,
-          },
-
-          price,
-          quantity: item.quantity,
-          total: price * item.quantity,
-        };
-      });
+      const orderJson = order.toJSON();
+      
+      // Get address with all fields
+      const address = orderJson.address || {};
+      
+      const items = orderJson.OrderItems?.map((item) => ({
+        orderItemId: item.id,
+        productId: item.productId,
+        variantId: item.variantId,
+        sizeId: item.sizeId,
+        
+        productName: item.productName || item.Product?.title,
+        variantColor: item.variantColor || item.ProductVariant?.colorName,
+        sizeLabel: item.sizeLabel || item.VariantSize?.size,
+        
+        quantity: item.quantity,
+        priceAtPurchase: item.priceAtPurchase,
+        totalPrice: item.totalPrice,
+        discountAtPurchase: item.discountAtPurchase,
+        finalPrice: item.finalPrice,
+        gstRate: item.gstRate,
+        
+        image: item.ProductVariant?.images?.[0]?.imageUrl || null,
+        
+        product: item.Product ? {
+          id: item.Product.id,
+          title: item.Product.title,
+          sku: item.Product.sku,
+          brandName: item.Product.brandName,
+          price: item.Product.price
+        } : null
+      })) || [];
 
       return {
-        // 🔹 FULL ORDER TABLE DATA
         orderDetails: {
           id: order.id,
           orderNumber: order.orderNumber,
+          
+          totalOriginalAmount: order.totalOriginalAmount,
+          productOfferDiscount: order.productOfferDiscount,
+          couponDiscount: order.couponDiscount,
+          totalDiscount: order.totalDiscount,
+          couponCode: order.couponCode,
+          
           subtotal: order.subtotal,
           shippingFee: order.shippingFee,
           taxAmount: order.taxAmount,
@@ -223,8 +275,9 @@ exports.getOrderHistory = async (req, res) => {
           paymentMethod: order.paymentMethod,
           transactionId: order.transactionId,
 
-          deliveryOtp: order.deliveryOtp,
+          otp: order.otp,
           otpVerified: order.otpVerified,
+          deliveryBoyId: order.deliveryBoyId,
 
           confirmedAt: order.confirmedAt,
           shippedAt: order.shippedAt,
@@ -238,35 +291,79 @@ exports.getOrderHistory = async (req, res) => {
           userId: order.userId,
         },
 
-        // 🔹 CUSTOMER INFO
-        customer: {
-          id: order.User?.id,
-          name: order.User?.userName,
-          email: order.User?.email,
+        // Address with all fields including Google Maps data
+        address: {
+          id: address.id,
+          fullName: address.fullName,
+          email: address.email,
+          phoneNumber: address.phoneNumber,
+          addressLine: address.addressLine,
+          country: address.country,
+          city: address.city,
+          state: address.state,
+          zipCode: address.zipCode,
+          shippingType: address.shippingType || 'delivery',
+          
+          // Google Maps fields
+          latitude: address.latitude,
+          longitude: address.longitude,
+          placeId: address.placeId,
+          formattedAddress: address.formattedAddress,
+          
+          // Generated links
+          googleMapsLink: address.latitude && address.longitude 
+            ? `https://www.google.com/maps?q=${address.latitude},${address.longitude}`
+            : address.formattedAddress 
+              ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address.formattedAddress)}`
+              : null,
+          directionsLink: address.latitude && address.longitude
+            ? `https://www.google.com/maps/dir/?api=1&destination=${address.latitude},${address.longitude}`
+            : null
         },
 
-        // 🔹 ADDRESS
-        address: order.address || null,
-
-        // 🔹 ITEMS
         items,
+
+        summary: {
+          totalItems: items.length,
+          totalQuantity: items.reduce((sum, item) => sum + item.quantity, 0),
+          subtotal: order.subtotal,
+          totalDiscount: order.totalDiscount,
+          shippingFee: order.shippingFee,
+          taxAmount: order.taxAmount,
+          grandTotal: order.totalAmount
+        },
+
+        // History-specific details
+        historyDetails: {
+          orderedOn: order.createdAt,
+          deliveredOn: order.deliveredAt,
+          cancelledOn: order.cancelledAt,
+          refundedOn: order.refundedAt,
+          finalStatus: order.status === 'cancelled' ? 'Cancelled' 
+                     : order.status === 'returned' ? 'Returned'
+                     : order.status === 'refunded' ? 'Refunded'
+                     : 'Delivered'
+        }
       };
     });
- const response = formatPagination(
+
+    const response = formatPagination(
       {
         count: orders.count,
         rows: formattedOrders,
       },
       paginationOptions.currentPage,
-      paginationOptions.limit
+      paginationOptions.limit,
     );
 
     return res.json({
       success: true,
       ...response,
     });
+
   } catch (err) {
-    return res.status(500).json({
+    console.error("Get Order History Error:", err);
+    res.status(500).json({
       success: false,
       message: err.message,
     });

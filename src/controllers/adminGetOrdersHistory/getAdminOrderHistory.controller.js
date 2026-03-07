@@ -142,6 +142,7 @@
 
 
 
+// controllers/adminOrders/getAdminOrderHistory.controller.js
 
 const {
   Order,
@@ -158,94 +159,154 @@ const {
   getPaginationOptions,
   formatPagination,
 } = require("../../utils/paginate");
+const { Op } = require("sequelize");
 
 exports.getAdminOrderHistory = async (req, res) => {
   try {
     const paginationOptions = getPaginationOptions(req.query);
+    
+    // Build where clause for order history
+    const whereClause = {
+      status: ["delivered", "completed", "cancelled", "refunded", "returned"],
+    };
+
+    // Add date range filter if provided
+    if (req.query.startDate && req.query.endDate) {
+      whereClause.createdAt = {
+        [Op.between]: [new Date(req.query.startDate), new Date(req.query.endDate)]
+      };
+    }
+
+    // Add search by order number or user
+    if (req.query.search) {
+      whereClause[Op.or] = [
+        { orderNumber: { [Op.like]: `%${req.query.search}%` } },
+        { '$User.userName$': { [Op.like]: `%${req.query.search}%` } },
+        { '$User.email$': { [Op.like]: `%${req.query.search}%` } },
+        { '$User.mobileNumber$': { [Op.like]: `%${req.query.search}%` } }
+      ];
+    }
+
     const orders = await Order.findAndCountAll({
-      where: {
-        status: ["delivered", "completed", "cancelled", "refunded"],
-      },
+      where: whereClause,
       include: [
+        {
+          model: User,
+          as: "User",
+          attributes: ["id", "userName", "email", "mobileNumber"],
+        },
         {
           model: OrderAddress,
           as: "address",
-        },
-        {
-          model: User,
-          attributes: ["id", "userName", "email"],
+          // Don't specify attributes - let Sequelize select all
         },
         {
           model: OrderItem,
+          as: "OrderItems",
           include: [
             {
-              model: Product, 
-               attributes: [
-                  "id",
-                  "title",
-                  "sku",       
-                ],
-              include: [{ model: ProductPrice, as: "price" }],
+              model: Product,
+              as: "Product",
+              attributes: ["id", "title", "sku", "brandName"],
+              include: [
+                { 
+                  model: ProductPrice, 
+                  as: "price", 
+                  attributes: ["sellingPrice", "mrp", "discountPercentage"] 
+                }
+              ],
             },
             {
               model: ProductVariant,
-              include: [{ model: VariantImage, as: "images", limit: 1 }],
+              as: "ProductVariant",
+              attributes: ["id", "colorName", "colorCode"],
+              include: [
+                { 
+                  model: VariantImage, 
+                  as: "images", 
+                  attributes: ["id", "imageUrl"],
+                  limit: 1 
+                }
+              ],
             },
             {
               model: VariantSize,
+              as: "VariantSize",
+              attributes: ["id", "size"],
             },
           ],
         },
       ],
-      // order: [["createdAt", "DESC"]],
-        distinct: true, // 🔥 VERY IMPORTANT with includes
+      order: [["createdAt", "DESC"]],
+      distinct: true,
       ...paginationOptions,
     });
 
-    /**
-     * 🔹 Transform response (same structure as Active Orders)
-     */
     const formattedOrders = orders.rows.map((order) => {
-      const items = order.OrderItems.map((item) => {
-        const sellingPrice = item.Product?.price?.sellingPrice || 0;
-
-        return {
-          orderItemId: item.id,
-          productId: item.productId,
-          title: item.Product?.title || "Unknown Product",
-          image: item.ProductVariant?.images?.[0]?.imageUrl || null,
-
-          variant: {
-            color: item.ProductVariant?.colorName || null,
-            size: item.VariantSize?.size || null,
-          },
-
-          price: sellingPrice,
-          quantity: item.quantity,
-          total: sellingPrice * item.quantity,
-        };
-      });
+      const orderJson = order.toJSON();
+      
+      // Get address with all fields
+      const address = orderJson.address || {};
+      
+      const items = orderJson.OrderItems?.map((item) => ({
+        orderItemId: item.id,
+        productId: item.productId,
+        variantId: item.variantId,
+        sizeId: item.sizeId,
+        
+        productName: item.productName || item.Product?.title,
+        variantColor: item.variantColor || item.ProductVariant?.colorName,
+        sizeLabel: item.sizeLabel || item.VariantSize?.size,
+        
+        quantity: item.quantity,
+        priceAtPurchase: item.priceAtPurchase,
+        totalPrice: item.totalPrice,
+        discountAtPurchase: item.discountAtPurchase,
+        finalPrice: item.finalPrice,
+        gstRate: item.gstRate,
+        
+        image: item.ProductVariant?.images?.[0]?.imageUrl || null,
+        
+        product: item.Product ? {
+          id: item.Product.id,
+          title: item.Product.title,
+          sku: item.Product.sku,
+          brandName: item.Product.brandName,
+          price: item.Product.price
+        } : null
+      })) || [];
 
       return {
-        /**
-         * 🆕 FULL ORDER TABLE DETAILS
-         */
+        // FULL ORDER DETAILS
         orderDetails: {
           id: order.id,
           orderNumber: order.orderNumber,
+          
+          // Discount Breakup
+          totalOriginalAmount: order.totalOriginalAmount,
+          productOfferDiscount: order.productOfferDiscount,
+          couponDiscount: order.couponDiscount,
+          totalDiscount: order.totalDiscount,
+          couponCode: order.couponCode,
+          
+          // Amounts
           subtotal: order.subtotal,
           shippingFee: order.shippingFee,
           taxAmount: order.taxAmount,
           totalAmount: order.totalAmount,
 
+          // Status
           status: order.status,
           paymentStatus: order.paymentStatus,
           paymentMethod: order.paymentMethod,
           transactionId: order.transactionId,
 
-          deliveryOtp: order.deliveryOtp,
+          // OTP and Delivery
+          otp: order.otp,
           otpVerified: order.otpVerified,
+          deliveryBoyId: order.deliveryBoyId,
 
+          // Timeline
           confirmedAt: order.confirmedAt,
           shippedAt: order.shippedAt,
           deliveredAt: order.deliveredAt,
@@ -253,29 +314,112 @@ exports.getAdminOrderHistory = async (req, res) => {
           cancelledAt: order.cancelledAt,
           refundedAt: order.refundedAt,
 
+          // Timestamps
           createdAt: order.createdAt,
           updatedAt: order.updatedAt,
           userId: order.userId,
         },
-        customer: {
-          id: order.User?.id,
-          name: order.User?.userName,
-          email: order.User?.email,
+
+        // CUSTOMER INFORMATION
+        customer: orderJson.User ? {
+          id: orderJson.User.id,
+          name: orderJson.User.userName,
+          email: orderJson.User.email,
+          phone: orderJson.User.mobileNumber,
+        } : null,
+
+        // DELIVERY ADDRESS with all fields including Google Maps data
+        address: {
+          id: address.id,
+          fullName: address.fullName,
+          email: address.email,
+          mobileNumber: address.mobileNumber,
+          addressLine: address.addressLine,
+          country: address.country,
+          city: address.city,
+          state: address.state,
+          zipCode: address.zipCode,
+          shippingType: address.shippingType || 'delivery',
+          
+          // Google Maps fields
+          latitude: address.latitude,
+          longitude: address.longitude,
+          placeId: address.placeId,
+          formattedAddress: address.formattedAddress,
+          
+          // Generated links
+          googleMapsLink: address.latitude && address.longitude 
+            ? `https://www.google.com/maps?q=${address.latitude},${address.longitude}`
+            : address.formattedAddress 
+              ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address.formattedAddress)}`
+              : null,
+          directionsLink: address.latitude && address.longitude
+            ? `https://www.google.com/maps/dir/?api=1&destination=${address.latitude},${address.longitude}`
+            : null
         },
-        address: order.address,
+
+        // ORDER ITEMS
         items,
+
+        // ORDER SUMMARY
+        summary: {
+          totalItems: items.length,
+          totalQuantity: items.reduce((sum, item) => sum + item.quantity, 0),
+          subtotal: order.subtotal,
+          totalDiscount: order.totalDiscount,
+          shippingFee: order.shippingFee,
+          taxAmount: order.taxAmount,
+          grandTotal: order.totalAmount
+        },
+
+        // HISTORY SPECIFIC FIELDS
+        historyDetails: {
+          finalStatus: order.status === 'cancelled' ? 'Cancelled' 
+                     : order.status === 'refunded' ? 'Refunded'
+                     : order.status === 'delivered' ? 'Delivered'
+                     : 'Completed',
+          completedOn: order.completedAt || order.deliveredAt,
+          cancelledOn: order.cancelledAt,
+          refundedOn: order.refundedAt,
+          orderAge: Math.ceil((new Date(order.completedAt || order.deliveredAt || new Date()) - new Date(order.createdAt)) / (1000 * 60 * 60 * 24)) + " days",
+        }
       };
     });
+
+    // Add summary statistics for admin
+    const statistics = {
+      totalOrders: orders.count,
+      totalRevenue: formattedOrders.reduce((sum, order) => sum + order.orderDetails.totalAmount, 0),
+      totalDiscountGiven: formattedOrders.reduce((sum, order) => sum + order.orderDetails.totalDiscount, 0),
+      averageOrderValue: orders.count > 0 
+        ? formattedOrders.reduce((sum, order) => sum + order.orderDetails.totalAmount, 0) / orders.count 
+        : 0,
+      
+      // Status breakdown
+      delivered: formattedOrders.filter(o => o.orderDetails.status === 'delivered').length,
+      completed: formattedOrders.filter(o => o.orderDetails.status === 'completed').length,
+      cancelled: formattedOrders.filter(o => o.orderDetails.status === 'cancelled').length,
+      refunded: formattedOrders.filter(o => o.orderDetails.status === 'refunded').length,
+      returned: formattedOrders.filter(o => o.orderDetails.status === 'returned').length,
+    };
+
     const response = formatPagination(
-      { count: orders.count, rows: formattedOrders },
+      {
+        count: orders.count,
+        rows: formattedOrders,
+      },
       paginationOptions.currentPage,
-      paginationOptions.limit
+      paginationOptions.limit,
     );
-    res.json({
-       success: true,
+
+    return res.json({
+      success: true,
+      statistics,
       ...response,
     });
+
   } catch (err) {
+    console.error("Admin Get Order History Error:", err);
     res.status(500).json({
       success: false,
       message: err.message,

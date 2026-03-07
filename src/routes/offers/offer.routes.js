@@ -79,7 +79,8 @@ router.post(
 router.get("/", adminAuthMiddleware, offerController.getAllOffers);
 router.get("/withImages", offerController.getAllOffersWithImages);
 router.get("/:id", adminAuthMiddleware, offerController.getOffer);
-router.patch("/:id/deactivate", adminAuthMiddleware, offerController.deactivateOffer)
+router.patch("/:id/deactivate", adminAuthMiddleware, offerController.deactivateOffer);
+router.patch("/:id/activate", adminAuthMiddleware, offerController.activateOffer);
 // In your routes file
 router.put(
   "/:id", 
@@ -92,6 +93,5 @@ router.put(
 // Public/user routes for frontend
 router.get("/active/frontend", protected, offerController.getActiveOffersForFrontend);
 router.get("/:id/offersProducts", protected, offerController.getOffersForProduct);
-
 
 module.exports = router;

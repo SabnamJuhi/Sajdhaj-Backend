@@ -805,7 +805,9 @@ exports.placeOrder = async (req, res) => {
     if (!addressId) {
       throw new Error("Address is required");
     }
-
+    if(!userId){
+      throw new Error("user not exist");
+    }
     if (!paymentMethod) {
       throw new Error("Payment method is required");
     }
@@ -1005,13 +1007,18 @@ exports.placeOrder = async (req, res) => {
     const shippingFee = finalSubTotal > 5000 || finalSubTotal === 0 ? 0 : 150;
     const grandTotal = finalSubTotal + taxAmount + shippingFee;
 
-    // 9️⃣ Generate Order Number
-    const orderNumber = `ORD-${Date.now()}-${userId}`;
+   const orderNumber = generateOrderNumber();
+    // Generate 6-digit OTP
+    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+    console.log(`OTP generated for order ${orderNumber}: ${otp}`);
 
     // 🔟 Create Order
     const order = await Order.create(
       {
         orderNumber,
+        userId,
+        otp: otp, // Always generate OTP for every order
+        otpVerified: false,
         
         // Discount Breakup
         totalOriginalAmount,

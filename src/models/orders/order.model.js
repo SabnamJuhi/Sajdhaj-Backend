@@ -42,6 +42,12 @@
 
 // module.exports = Order;
 
+
+
+
+
+
+
 const { DataTypes } = require("sequelize");
 const sequelize = require("../../config/db");
 

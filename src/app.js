@@ -46,6 +46,8 @@ app.use("/api/bulkorder", require("./routes/BulkUploadRoute/bulkUpload.route"))
 app.use("/api/contact", require("./routes/contact/contact.routes"));
 
 app.use("/api/banners", require("./routes/banner/banner.routes"));
+app.use("/api/collection", require("./routes/banner/collectionBanner.routes"));
+app.use("/api/occassional", require("./routes/banner/occasionalBanner.routes"));
 
 app.use("/api/checkout", require("./routes/checkout/checkout.routes"));
 

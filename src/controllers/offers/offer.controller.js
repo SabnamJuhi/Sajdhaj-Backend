@@ -1764,3 +1764,62 @@ exports.getOffer = async (req, res) => {
     });
   }
 };
+
+
+/**
+ * ACTIVATE OFFER (set isActive to true)
+ */
+exports.activateOffer = async (req, res) => {
+  const t = await sequelize.transaction();
+
+  try {
+    const { id } = req.params;
+
+    // Find the offer
+    const offer = await Offer.findByPk(id, { transaction: t });
+
+    if (!offer) {
+      await t.rollback();
+      return res.status(404).json({ 
+        success: false,
+        message: "Offer not found" 
+      });
+    }
+
+    // Check if already active
+    if (offer.isActive) {
+      await t.rollback();
+      return res.status(400).json({
+        success: false,
+        message: "Offer is already active"
+      });
+    }
+
+    // Update isActive to true
+    await offer.update(
+      { isActive: true },
+      { transaction: t }
+    );
+
+    await t.commit();
+
+    return res.status(200).json({
+      success: true,
+      message: "Offer activated successfully",
+      data: {
+        offerId: offer.id,
+        offerCode: offer.offerCode,
+        isActive: offer.isActive
+      }
+    });
+
+  } catch (err) {
+    await t.rollback();
+    console.error("Activate Offer Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to activate offer",
+      error: err.message
+    });
+  }
+};

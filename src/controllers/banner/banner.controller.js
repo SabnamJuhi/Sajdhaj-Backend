@@ -116,7 +116,6 @@ exports.updateBanner = async (req, res) => {
 };
 
 
-/* DELETE BANNER (soft + cloudinary delete optional) */
 /* DELETE BANNER */
 exports.deleteBanner = async (req, res) => {
   try {
@@ -173,3 +172,117 @@ exports.deleteBanner = async (req, res) => {
 };
 
 
+/**
+ * SOFT DELETE BANNER (set isActive to false)
+ */
+exports.softDeleteBanner = async (req, res) => {
+  try {
+    console.log("Soft delete banner request for ID:", req.params.id);
+    
+    const banner = await Banner.findByPk(req.params.id);
+    
+    if (!banner) {
+      console.log("Banner not found with ID:", req.params.id);
+      return res.status(404).json({ 
+        success: false, 
+        message: "Banner not found" 
+      });
+    }
+
+    console.log("Found banner:", banner.toJSON());
+
+    // Check if already inactive
+    if (!banner.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: "Banner is already inactive"
+      });
+    }
+
+    // Update isActive to false (soft delete)
+    await banner.update({ isActive: false });
+    
+    console.log("Banner soft deleted successfully");
+
+    res.json({ 
+      success: true, 
+      message: "Banner soft deleted successfully (isActive = false)",
+      data: {
+        id: banner.id,
+        title: banner.title,
+        isActive: banner.isActive
+      }
+    });
+    
+  } catch (err) {
+    console.error("Soft delete banner error details:", {
+      message: err.message,
+      name: err.name,
+      stack: err.stack
+    });
+    
+    res.status(500).json({ 
+      success: false, 
+      message: "Soft delete failed",
+      error: err.message 
+    });
+  }
+};
+
+
+/**
+ * RESTORE BANNER (set isActive to true)
+ */
+exports.restoreBanner = async (req, res) => {
+  try {
+    console.log("Restore banner request for ID:", req.params.id);
+    
+    const banner = await Banner.findByPk(req.params.id);
+    
+    if (!banner) {
+      console.log("Banner not found with ID:", req.params.id);
+      return res.status(404).json({ 
+        success: false, 
+        message: "Banner not found" 
+      });
+    }
+
+    console.log("Found banner:", banner.toJSON());
+
+    // Check if already active
+    if (banner.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: "Banner is already active"
+      });
+    }
+
+    // Update isActive to true (restore)
+    await banner.update({ isActive: true });
+    
+    console.log("Banner restored successfully");
+
+    res.json({ 
+      success: true, 
+      message: "Banner restored successfully (isActive = true)",
+      data: {
+        id: banner.id,
+        title: banner.title,
+        isActive: banner.isActive
+      }
+    });
+    
+  } catch (err) {
+    console.error("Restore banner error details:", {
+      message: err.message,
+      name: err.name,
+      stack: err.stack
+    });
+    
+    res.status(500).json({ 
+      success: false, 
+      message: "Restore failed",
+      error: err.message 
+    });
+  }
+};
