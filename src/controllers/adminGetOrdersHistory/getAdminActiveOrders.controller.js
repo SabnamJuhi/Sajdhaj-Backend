@@ -636,7 +636,8 @@ exports.getAdminActiveOrders = async (req, res) => {
                 { 
                   model: VariantImage, 
                   as: "images", 
-                  attributes: ["id", "imageUrl"]
+                  attributes: ["id", "imageUrl"],
+                  limit: 3
                 }
               ],
             },
