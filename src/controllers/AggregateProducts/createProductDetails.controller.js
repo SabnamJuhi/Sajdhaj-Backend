@@ -120,7 +120,7 @@ exports.createProduct = async (req, res) => {
       discountPercentage: parsedPrice.discountPercentage,
     });
 
-    await ProductPrice.create(
+    await ProductPrice.upsert(
       {
         productId: product.id,
         mrp: calculatedPrice.mrp,
@@ -204,7 +204,7 @@ exports.createProduct = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "Product created successfully with Cloudinary images",
+      message: "Product created successfully with images",
       productId: product.id,
     });
   } catch (error) {

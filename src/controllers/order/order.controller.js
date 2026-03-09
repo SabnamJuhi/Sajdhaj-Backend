@@ -604,6 +604,7 @@ const {
   generateChecksum,
 } = require("../../utils/iciciCrypto");
 const CartCoupon = require("../../models/offers/cartCoupon.model");
+const ShippingSetting = require("../../models/shippingFee/shipping.model");
 
 /**
  * STEP 1 — Place Order & Generate ICICI Payment Payload
@@ -793,6 +794,402 @@ const CartCoupon = require("../../models/offers/cartCoupon.model");
 // };
 
 
+// exports.placeOrder = async (req, res) => {
+//   const t = await sequelize.transaction();
+
+//   try {
+//     const userId = req.user.id;
+//     const { addressId, paymentMethod, couponCode } = req.body;
+//     const now = new Date();
+
+//     // Validation
+//     if (!addressId) {
+//       throw new Error("Address is required");
+//     }
+//     if(!userId){
+//       throw new Error("user not exist");
+//     }
+//     if (!paymentMethod) {
+//       throw new Error("Payment method is required");
+//     }
+
+//     // 1️⃣ Fetch User Address
+//     const userAddress = await UserAddress.findOne({
+//       where: { id: addressId, userId },
+//       transaction: t,
+//       lock: t.LOCK.UPDATE,
+//     });
+
+//     if (!userAddress) {
+//       throw new Error("Invalid address selected");
+//     }
+
+//     // 2️⃣ Fetch Cart Items
+//     const cartItems = await CartItem.findAll({
+//       where: { userId },
+//       include: [
+//         {
+//           model: Product,
+//           as: "product",
+//           include: [{ model: ProductPrice, as: "price" }]
+//         },
+//         { model: ProductVariant, as: "variant" },
+//         { model: VariantSize, as: "variantSize" }
+//       ],
+//       transaction: t,
+//       lock: t.LOCK.UPDATE,
+//     });
+
+//     if (!cartItems.length) {
+//       throw new Error("Cart is empty");
+//     }
+
+//     // 3️⃣ Check stock availability
+//     for (const item of cartItems) {
+//       const currentStock = item.variantSize?.stock || 0;
+//       if (currentStock < item.quantity) {
+//         throw new Error(`Insufficient stock for ${item.product?.title || 'product'}. Available: ${currentStock}`);
+//       }
+//     }
+
+//     // 4️⃣ Fetch Active Offers
+//     const activeOffers = await Offer.findAll({
+//       where: {
+//         isActive: true,
+//         startDate: { [Op.lte]: now },
+//         endDate: { [Op.gte]: now }
+//       },
+//       include: [
+//         { model: OfferSub, as: "subOffers" },
+//         { model: OfferApplicableProduct, as: "offerApplicableProducts" }
+//       ],
+//       transaction: t,
+//     });
+
+//     // 5️⃣ Process Cart Items with Offers
+//     let totalOriginalAmount = 0;
+//     let productOfferDiscount = 0;
+//     let subTotal = 0;
+//     let totalQuantity = 0;
+    
+//     // 🔥 NEW: Track eligible amount for coupon
+//     let eligibleForCouponTotal = 0;
+
+//     const processedItems = [];
+
+//     for (let item of cartItems) {
+//       const sellingPrice = Number(item.product?.price?.sellingPrice || 0);
+//       const gstRate = Number(item.product?.gstRate || 0);
+//       const quantity = item.quantity;
+//       const currentStock = item.variantSize?.stock || 0;
+
+//       const isAvailable = currentStock > 0;
+//       const validQuantity = isAvailable ? Math.min(quantity, currentStock) : 0;
+
+//       totalQuantity += validQuantity;
+
+//       const originalAmount = sellingPrice * validQuantity;
+//       totalOriginalAmount += originalAmount;
+
+//       let itemDiscount = 0;
+//       let offerApplied = false;
+
+//       // Offer Check
+//       for (let offer of activeOffers) {
+//         const isProductEligible = offer.offerApplicableProducts.some(
+//           p => p.productId === item.productId
+//         );
+
+//         if (!isProductEligible) continue;
+
+//         const subOffer = offer.subOffers[0];
+//         if (!subOffer) continue;
+
+//         if (originalAmount < subOffer.minOrderValue) continue;
+
+//         if (subOffer.discountType === "PERCENTAGE") {
+//           let discount = (originalAmount * subOffer.discountValue) / 100;
+//           if (subOffer.maxDiscount) {
+//             discount = Math.min(discount, subOffer.maxDiscount);
+//           }
+//           itemDiscount = discount;
+//         } else if (subOffer.discountType === "FLAT") {
+//           itemDiscount = subOffer.discountValue;
+//         }
+
+//         offerApplied = true;
+//         break;
+//       }
+
+//       const finalAmount = originalAmount - itemDiscount;
+
+//       if (isAvailable) {
+//         subTotal += finalAmount;
+//         productOfferDiscount += itemDiscount;
+        
+//         // 🔥 Track eligible amount for coupon
+//         if (!offerApplied) {
+//           eligibleForCouponTotal += originalAmount;
+//         }
+//       }
+
+//       processedItems.push({
+//         productId: item.productId,
+//         variantId: item.variantId,
+//         sizeId: item.sizeId,
+//         quantity: validQuantity,
+//         sellingPrice,
+//         originalAmount,
+//         itemDiscount,
+//         finalAmount,
+//         gstRate,
+//         offerApplied,
+//         productName: item.product?.title || "Unknown Product",
+//         variantColor: item.variant?.colorName,
+//         sizeLabel: item.variantSize?.size,
+//       });
+//     }
+
+//     // 6️⃣ Calculate Coupon Discount (based on eligible items only)
+//     let couponDiscount = 0;
+//     let appliedCouponCode = null;
+
+//     if (couponCode && eligibleForCouponTotal > 0) {
+//       const coupon = await Coupon.findOne({
+//         where: {
+//           code: couponCode,
+//           isActive: true,
+//           startDate: { [Op.lte]: now },
+//           endDate: { [Op.gte]: now }
+//         },
+//         transaction: t,
+//       });
+
+//       if (coupon) {
+//         const minCartValue = Number(coupon.minCartValue || 0);
+        
+//         // 🔥 Check min cart value on eligible items only
+//         if (eligibleForCouponTotal >= minCartValue) {
+//           appliedCouponCode = coupon.code;
+
+//           if (coupon.discountType === "PERCENTAGE") {
+//             let discount = (eligibleForCouponTotal * Number(coupon.discountValue || 0)) / 100;
+//             if (coupon.maxDiscount) {
+//               discount = Math.min(discount, Number(coupon.maxDiscount));
+//             }
+//             couponDiscount = discount;
+//           } else if (coupon.discountType === "FLAT") {
+//             const flatDiscount = Number(coupon.discountValue || 0);
+//             couponDiscount = Math.min(flatDiscount, eligibleForCouponTotal);
+//           }
+//         }
+//       }
+//     }
+
+//     const finalSubTotal = subTotal - couponDiscount;
+
+//     // 7️⃣ Calculate GST (based on correct coupon allocation)
+//     let taxAmount = 0;
+
+//     for (let item of processedItems) {
+//       let itemAfterCoupon = item.finalAmount;
+      
+//       // 🔥 Only apply coupon to eligible items proportionally
+//       if (appliedCouponCode && !item.offerApplied && eligibleForCouponTotal > 0) {
+//         const proportion = item.originalAmount / eligibleForCouponTotal;
+//         itemAfterCoupon = item.finalAmount - (couponDiscount * proportion);
+//       }
+
+//       const itemTax = Math.round((itemAfterCoupon * item.gstRate) / 100);
+//       taxAmount += itemTax;
+//     }
+
+//     // 8️⃣ Calculate Shipping Fee
+//     const shippingFee = finalSubTotal > 5000 || finalSubTotal === 0 ? 0 : 150;
+//     const grandTotal = finalSubTotal + taxAmount + shippingFee;
+
+//    const orderNumber = generateOrderNumber();
+//     // Generate 6-digit OTP
+//     const otp = Math.floor(1000 + Math.random() * 9000).toString();
+//     console.log(`OTP generated for order ${orderNumber}: ${otp}`);
+
+//     // 🔟 Create Order
+//     const order = await Order.create(
+//       {
+//         orderNumber,
+//         userId,
+//         otp: otp, // Always generate OTP for every order
+//         otpVerified: false,
+        
+//         // Discount Breakup
+//         totalOriginalAmount,
+//         productOfferDiscount,
+//         couponDiscount,
+//         totalDiscount: productOfferDiscount + couponDiscount,
+//         couponCode: appliedCouponCode,
+
+//         // Amounts
+//         subtotal: finalSubTotal,
+//         shippingFee,
+//         taxAmount,
+//         totalAmount: grandTotal,
+
+//         // Status
+//         status: paymentMethod === "COD" ? "confirmed" : "pending",
+//         paymentMethod,
+//         paymentStatus: paymentMethod === "COD" ? "unpaid" : "unpaid",
+
+//         // Timestamps
+//         confirmedAt: paymentMethod === "COD" ? new Date() : null,
+//       },
+//       { transaction: t }
+//     );
+
+//     // 1️⃣1️⃣ Create Order Items
+//     const orderItems = processedItems.map((item) => ({
+//       orderId: order.id,
+//       productId: item.productId,
+//       variantId: item.variantId,
+//       sizeId: item.sizeId,
+
+//       productName: item.productName,
+//       variantColor: item.variantColor,
+//       sizeLabel: item.sizeLabel,
+
+//       quantity: item.quantity,
+//       priceAtPurchase: item.sellingPrice,
+//       totalPrice: item.originalAmount,
+//       discountAtPurchase: item.itemDiscount,
+//       finalPrice: item.finalAmount,
+//       gstRate: item.gstRate,
+//     }));
+
+//     await OrderItem.bulkCreate(orderItems, { transaction: t });
+
+//     // 1️⃣2️⃣ Save Address Snapshot
+//     await OrderAddress.create(
+//       {
+//         orderId: order.id,
+//         fullName: userAddress.fullName,
+//         email: userAddress.email,
+//         phoneNumber: userAddress.phoneNumber,
+//         addressLine: userAddress.addressLine,
+//         country: userAddress.country,
+//         city: userAddress.city,
+//         state: userAddress.state,
+//         zipCode: userAddress.zipCode,
+//         landmark: userAddress.landmark,
+//         addressType: userAddress.addressType,
+//       },
+//       { transaction: t }
+//     );
+
+//     // 1️⃣3️⃣ Handle based on Payment Method
+//     if (paymentMethod === "COD") {
+//       // Deduct stock
+//       for (const item of processedItems) {
+//         await VariantSize.decrement("stock", {
+//           by: item.quantity,
+//           where: { id: item.sizeId },
+//           transaction: t,
+//         });
+
+//         await ProductVariant.decrement("totalStock", {
+//           by: item.quantity,
+//           where: { id: item.variantId },
+//           transaction: t,
+//         });
+//       }
+
+//       // Clear cart and coupon
+//       await CartItem.destroy({ where: { userId }, transaction: t });
+//       await CartCoupon.destroy({ where: { userId }, transaction: t });
+
+//       await t.commit();
+
+//       return res.status(200).json({
+//         success: true,
+//         message: "Order placed successfully",
+//         data: {
+//           orderId: order.id,
+//           orderNumber: order.orderNumber,
+//           totalAmount: grandTotal,
+//           paymentMethod: "COD",
+//           paymentStatus: "unpaid",
+//           status: "confirmed",
+//         },
+//       });
+//     } 
+//     else if (paymentMethod === "ICICI") {
+//       await t.commit();
+
+//       const paymentData = {
+//         merchantId: process.env.ICICI_MERCHANT_ID,
+//         orderNumber: order.orderNumber,
+//         amount: grandTotal.toFixed(2),
+//         currency: "INR",
+//         returnUrl: process.env.ICICI_RETURN_URL,
+//         cancelUrl: process.env.ICICI_CANCEL_URL,
+//         customerName: userAddress.fullName,
+//         customerEmail: userAddress.email,
+//         customerMobile: userAddress.phoneNumber,
+//       };
+
+//       const payload = JSON.stringify(paymentData);
+//       const encData = encrypt(payload, process.env.ICICI_ENCRYPTION_KEY);
+//       const checksum = generateChecksum(encData, process.env.ICICI_CHECKSUM_KEY);
+
+//       return res.status(200).json({
+//         success: true,
+//         message: "Order created, proceeding to payment",
+//         data: {
+//           orderId: order.id,
+//           orderNumber: order.orderNumber,
+//           totalAmount: grandTotal,
+//           paymentMethod: "ICICI",
+//           paymentStatus: "unpaid",
+//           status: "pending",
+//           paymentDetails: {
+//             paymentUrl: process.env.ICICI_PAYMENT_URL,
+//             encData,
+//             checksum,
+//             merchantId: process.env.ICICI_MERCHANT_ID,
+//           },
+//         },
+//       });
+//     }
+//     else {
+//       await t.commit();
+
+//       return res.status(200).json({
+//         success: true,
+//         message: "Order created successfully",
+//         data: {
+//           orderId: order.id,
+//           orderNumber: order.orderNumber,
+//           totalAmount: grandTotal,
+//           paymentMethod,
+//           paymentStatus: "unpaid",
+//           status: "pending",
+//         },
+//       });
+//     }
+
+//   } catch (error) {
+//     if (t && !t.finished) {
+//       await t.rollback();
+//     }
+
+//     console.error("Place Order Error:", error);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message || "Something went wrong while placing order",
+//     });
+//   }
+// };
+
+
 exports.placeOrder = async (req, res) => {
   const t = await sequelize.transaction();
 
@@ -811,6 +1208,17 @@ exports.placeOrder = async (req, res) => {
     if (!paymentMethod) {
       throw new Error("Payment method is required");
     }
+
+      // 0️⃣ Fetch Shipping Settings (STATIC FEE FROM ADMIN)
+    let shippingSettings = await ShippingSetting.findOne({
+      transaction: t,
+    });
+    if (!shippingSettings) {
+      shippingSettings = await ShippingSetting.create({
+        shippingFee: 50,
+      }, { transaction: t });
+    }
+    const STATIC_SHIPPING_FEE = Number(shippingSettings.shippingFee);
 
     // 1️⃣ Fetch User Address
     const userAddress = await UserAddress.findOne({
@@ -865,19 +1273,21 @@ exports.placeOrder = async (req, res) => {
       transaction: t,
     });
 
-    // 5️⃣ Process Cart Items with Offers
+    // 5️⃣ Process Cart Items with Offers (MODIFIED)
     let totalOriginalAmount = 0;
     let productOfferDiscount = 0;
     let subTotal = 0;
     let totalQuantity = 0;
-    
-    // 🔥 NEW: Track eligible amount for coupon
+
+    // Track eligible amount for coupon
     let eligibleForCouponTotal = 0;
 
     const processedItems = [];
 
     for (let item of cartItems) {
+      const mrp = Number(item.product?.price?.mrp || 0);
       const sellingPrice = Number(item.product?.price?.sellingPrice || 0);
+      const discountPercentage = Number(item.product?.price?.discountPercentage || 0);
       const gstRate = Number(item.product?.gstRate || 0);
       const quantity = item.quantity;
       const currentStock = item.variantSize?.stock || 0;
@@ -887,11 +1297,18 @@ exports.placeOrder = async (req, res) => {
 
       totalQuantity += validQuantity;
 
-      const originalAmount = sellingPrice * validQuantity;
-      totalOriginalAmount += originalAmount;
+      // Calculate with quantity
+      const totalMrp = mrp * validQuantity;
+      const totalSellingPrice = sellingPrice * validQuantity;
+      
+      totalOriginalAmount += totalSellingPrice;
 
-      let itemDiscount = 0;
+      let itemOfferDiscount = 0;
       let offerApplied = false;
+      let appliedOfferId = null;
+      let appliedSubOfferId = null;
+      let offerDiscountType = null;
+      let offerDiscountValue = null;
 
       // Offer Check
       for (let offer of activeOffers) {
@@ -904,48 +1321,76 @@ exports.placeOrder = async (req, res) => {
         const subOffer = offer.subOffers[0];
         if (!subOffer) continue;
 
-        if (originalAmount < subOffer.minOrderValue) continue;
+        if (totalSellingPrice < subOffer.minOrderValue) continue;
 
         if (subOffer.discountType === "PERCENTAGE") {
-          let discount = (originalAmount * subOffer.discountValue) / 100;
+          let discount = (totalSellingPrice * subOffer.discountValue) / 100;
           if (subOffer.maxDiscount) {
             discount = Math.min(discount, subOffer.maxDiscount);
           }
-          itemDiscount = discount;
+          itemOfferDiscount = discount;
+          offerDiscountType = "PERCENTAGE";
+          offerDiscountValue = subOffer.discountValue;
         } else if (subOffer.discountType === "FLAT") {
-          itemDiscount = subOffer.discountValue;
+          itemOfferDiscount = subOffer.discountValue;
+          offerDiscountType = "FLAT";
+          offerDiscountValue = subOffer.discountValue;
         }
 
         offerApplied = true;
+        appliedOfferId = offer.id;
+        appliedSubOfferId = subOffer.id;
         break;
       }
 
-      const finalAmount = originalAmount - itemDiscount;
+      const finalAmount = totalSellingPrice - itemOfferDiscount;
 
       if (isAvailable) {
         subTotal += finalAmount;
-        productOfferDiscount += itemDiscount;
+        productOfferDiscount += itemOfferDiscount;
         
-        // 🔥 Track eligible amount for coupon
+        // Track eligible amount for coupon (only items without offer)
         if (!offerApplied) {
-          eligibleForCouponTotal += originalAmount;
+          eligibleForCouponTotal += totalSellingPrice;
         }
       }
 
       processedItems.push({
+        // Basic Info
         productId: item.productId,
         variantId: item.variantId,
         sizeId: item.sizeId,
-        quantity: validQuantity,
-        sellingPrice,
-        originalAmount,
-        itemDiscount,
-        finalAmount,
-        gstRate,
-        offerApplied,
         productName: item.product?.title || "Unknown Product",
-        variantColor: item.variant?.colorName,
-        sizeLabel: item.variantSize?.size,
+        variantInfo: {
+          colorName: item.variant?.colorName,
+          colorCode: item.variant?.colorCode,
+          swatch: item.variant?.swatch,
+          size: item.variantSize?.size,
+        },
+        
+        // Base Pricing
+        mrp,
+        sellingPrice,
+        discountPercentage,
+        quantity: validQuantity,
+        
+        // Totals with Quantity
+        totalMrp,
+        totalSellingPrice,
+        
+        // Offer Details
+        offerId: appliedOfferId,
+        subOfferId: appliedSubOfferId,
+        offerDiscountType,
+        offerDiscountValue,
+        offerDiscountAmount: itemOfferDiscount,
+        offerApplied,
+        
+        // After Offer
+        finalAmount,
+        
+        // GST
+        gstRate,
       });
     }
 
@@ -967,7 +1412,6 @@ exports.placeOrder = async (req, res) => {
       if (coupon) {
         const minCartValue = Number(coupon.minCartValue || 0);
         
-        // 🔥 Check min cart value on eligible items only
         if (eligibleForCouponTotal >= minCartValue) {
           appliedCouponCode = coupon.code;
 
@@ -985,39 +1429,59 @@ exports.placeOrder = async (req, res) => {
       }
     }
 
-    const finalSubTotal = subTotal - couponDiscount;
-
-    // 7️⃣ Calculate GST (based on correct coupon allocation)
+    // 7️⃣ Apply Coupon and Calculate Final Values
     let taxAmount = 0;
+    const finalProcessedItems = [];
 
     for (let item of processedItems) {
-      let itemAfterCoupon = item.finalAmount;
+      let itemCouponDiscount = 0;
       
-      // 🔥 Only apply coupon to eligible items proportionally
+      // Apply coupon only to eligible items proportionally
       if (appliedCouponCode && !item.offerApplied && eligibleForCouponTotal > 0) {
-        const proportion = item.originalAmount / eligibleForCouponTotal;
-        itemAfterCoupon = item.finalAmount - (couponDiscount * proportion);
+        const proportion = item.totalSellingPrice / eligibleForCouponTotal;
+        itemCouponDiscount = couponDiscount * proportion;
       }
 
-      const itemTax = Math.round((itemAfterCoupon * item.gstRate) / 100);
-      taxAmount += itemTax;
+      // Calculate subtotal (price after offer and coupon)
+      const subtotal = item.finalAmount - itemCouponDiscount;
+      
+      // Calculate total discount
+      const totalDiscount = item.offerDiscountAmount + itemCouponDiscount;
+      
+      // Calculate GST
+      const gstAmount = Math.round((subtotal * item.gstRate) / 100);
+      taxAmount += gstAmount;
+      
+      // Final price with GST
+      const finalPrice = subtotal + gstAmount;
+
+      finalProcessedItems.push({
+        ...item,
+        couponDiscountAmount: itemCouponDiscount,
+        subtotal,
+        totalDiscount,
+        gstAmount,
+        finalPrice,
+      });
     }
 
-    // 8️⃣ Calculate Shipping Fee
-    const shippingFee = finalSubTotal > 5000 || finalSubTotal === 0 ? 0 : 150;
+    const finalSubTotal = subTotal - couponDiscount;
+
+      // 8️⃣ Calculate Shipping Fee - NOW USING STATIC FEE FROM ADMIN
+    const shippingFee = STATIC_SHIPPING_FEE;
     const grandTotal = finalSubTotal + taxAmount + shippingFee;
 
-   const orderNumber = generateOrderNumber();
+    const orderNumber = generateOrderNumber();
     // Generate 6-digit OTP
     const otp = Math.floor(1000 + Math.random() * 9000).toString();
     console.log(`OTP generated for order ${orderNumber}: ${otp}`);
 
-    // 🔟 Create Order
+    // 🔟 Create Order (COMPLETELY UNCHANGED - YOUR EXISTING CODE)
     const order = await Order.create(
       {
         orderNumber,
         userId,
-        otp: otp, // Always generate OTP for every order
+        otp: otp,
         otpVerified: false,
         
         // Discount Breakup
@@ -1044,23 +1508,49 @@ exports.placeOrder = async (req, res) => {
       { transaction: t }
     );
 
-    // 1️⃣1️⃣ Create Order Items
-    const orderItems = processedItems.map((item) => ({
+    // 1️⃣1️⃣ Create Order Items (MODIFIED - USING NEW MODEL FIELDS)
+    const orderItems = finalProcessedItems.map((item) => ({
       orderId: order.id,
       productId: item.productId,
       variantId: item.variantId,
       sizeId: item.sizeId,
 
+      // Product Details
       productName: item.productName,
-      variantColor: item.variantColor,
-      sizeLabel: item.sizeLabel,
+      variantInfo: item.variantInfo,
 
+      // Base Pricing
+      mrp: item.mrp,
+      sellingPrice: item.sellingPrice,
+      discountPercentage: item.discountPercentage,
       quantity: item.quantity,
-      priceAtPurchase: item.sellingPrice,
-      totalPrice: item.originalAmount,
-      discountAtPurchase: item.itemDiscount,
-      finalPrice: item.finalAmount,
+
+      // Totals with Quantity
+      totalMrp: item.totalMrp,
+      totalSellingPrice: item.totalSellingPrice,
+
+      // Offer Details
+      offerId: item.offerId,
+      subOfferId: item.subOfferId,
+      offerDiscountType: item.offerDiscountType,
+      offerDiscountValue: item.offerDiscountValue,
+      offerDiscountAmount: item.offerDiscountAmount,
+      finalAmount: item.finalAmount,
+
+      // Coupon Details
+      couponDiscountAmount: item.couponDiscountAmount,
+
+      // Final Calculations
+      subtotal: item.subtotal,
+      totalDiscount: item.totalDiscount,
+
+      // GST
       gstRate: item.gstRate,
+      gstAmount: item.gstAmount,
+      finalPrice: item.finalPrice,
+
+      // Offer Applied Flag
+      offerApplied: item.offerApplied,
     }));
 
     await OrderItem.bulkCreate(orderItems, { transaction: t });
@@ -1187,7 +1677,6 @@ exports.placeOrder = async (req, res) => {
     });
   }
 };
-
 
 
 /**

@@ -46,30 +46,32 @@
 //   }
 // }
 
-
-
-const ProductPrice = require("../models/products/price.model")
+const ProductPrice = require("../models/products/price.model");
 
 exports.upsert = async (productId, price, transaction) => {
-  const discountPercentage =
-    Math.round(((price.mrp - price.sellingPrice) / price.mrp) * 100)
-
   const [row] = await ProductPrice.findOrCreate({
     where: { productId },
     defaults: {
-      ...price,
-      discountPercentage,
-      currency: price.currency || "INR"
+      productId,
+      ...price, 
+      currency: price.currency || "INR",
     },
-    transaction
-  })
+    transaction,
+  });
 
-  return row.update(
-    { ...price, discountPercentage },
-    { transaction }
-  )
-}
+  // If not created, update the existing one
+  if (!row.isNewRecord) {
+    await row.update(
+      {
+        ...price,
+        currency: price.currency || "INR",
+      },
+      { transaction },
+    );
+  }
 
+  return row;
+};
 
 exports.calculatePrice = ({ mrp, sellingPrice, discountPercentage }) => {
   if (!mrp) {
@@ -90,15 +92,15 @@ exports.calculatePrice = ({ mrp, sellingPrice, discountPercentage }) => {
     sellingPrice = Number(sellingPrice);
 
     discountPercentage = ((mrp - sellingPrice) / mrp) * 100;
-  }
-
-  else {
-    throw new Error("Either sellingPrice or discountPercentage must be provided");
+  } else {
+    throw new Error(
+      "Either sellingPrice or discountPercentage must be provided",
+    );
   }
 
   return {
     mrp,
     sellingPrice: Math.round(sellingPrice),
-    discountPercentage: Math.round(discountPercentage)
+    discountPercentage: Math.round(discountPercentage),
   };
 };

@@ -12,6 +12,7 @@ const {
 } = require("../../models");
 const { calculateCartDiscount } = require("../../services/discount.service");
 const CartCoupon = require("../../models/offers/cartCoupon.model");
+const ShippingSetting = require("../../models/shippingFee/shipping.model");
 
 
 
@@ -19,6 +20,16 @@ exports.getCart = async (req, res) => {
   try {
     const userId = req.user.id;
     const now = new Date();
+
+     // 0️⃣ Fetch Shipping Settings (STATIC FEE FROM ADMIN)
+    let shippingSettings = await ShippingSetting.findOne();
+    if (!shippingSettings) {
+      // Create default if not exists
+      shippingSettings = await ShippingSetting.create({
+        shippingFee: 50,
+      });
+    }
+    const STATIC_SHIPPING_FEE = Number(shippingSettings.shippingFee);
 
     // 1️⃣ Fetch Saved Coupon (if exists)
     const savedCoupon = await CartCoupon.findOne({
@@ -274,13 +285,9 @@ exports.getCart = async (req, res) => {
       });
     }
 
-    // ===============================
-    // 🚚 SHIPPING
-    // ===============================
-
-    const shippingFee = finalSubTotal > 5000 || finalSubTotal === 0 ? 0 : 150;
+      // 🚚 SHIPPING - NOW USING STATIC FEE FROM ADMIN
+    const shippingFee = STATIC_SHIPPING_FEE;
     const grandTotal = finalSubTotal + taxAmount + shippingFee;
-
     // ===============================
     // 📊 Summary Statistics
     // ===============================
