@@ -578,7 +578,7 @@ exports.getOrderHistory = async (req, res) => {
 
       // Determine status display and badge color
       const statusConfig = {
-        delivered: { label: 'Delivered', color: 'green', icon: 'check-circle' },
+        // delivered: { label: 'Delivered', color: 'green', icon: 'check-circle' },
         completed: { label: 'Completed', color: 'green', icon: 'check-circle' },
         cancelled: { label: 'Cancelled', color: 'red', icon: 'x-circle' },
         returned: { label: 'Returned', color: 'orange', icon: 'refresh-cw' },

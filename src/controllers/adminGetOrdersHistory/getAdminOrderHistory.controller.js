@@ -776,7 +776,7 @@ exports.getAdminOrderHistory = async (req, res) => {
           finalStatus: order.status === 'cancelled' ? 'Cancelled' 
                      : order.status === 'refunded' ? 'Refunded'
                      : order.status === 'returned' ? 'Returned'
-                     : order.status === 'delivered' ? 'Delivered'
+                    //  : order.status === 'delivered' ? 'Delivered'
                      : 'Completed',
           completedOn: order.completedAt || order.deliveredAt,
           cancelledOn: order.cancelledAt,
