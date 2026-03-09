@@ -9,13 +9,11 @@ const {
   Offer,
   OfferSub,
   OfferApplicableProduct,
-  Coupon
+  Coupon,
 } = require("../../models");
 const { calculateCartDiscount } = require("../../services/discount.service");
 const CartCoupon = require("../../models/offers/cartCoupon.model");
 const ShippingSetting = require("../../models/shippingFee/shipping.model");
-
-
 
 // exports.getCart = async (req, res) => {
 //   try {
@@ -72,7 +70,7 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 //     let subTotal = 0;
 //     let totalOriginalAmount = 0;
 //     let productOfferDiscount = 0;
-    
+
 //     // 🔥 NEW: Track eligible amount for coupon (items without offers)
 //     let eligibleForCouponTotal = 0; // Original amount of items without offers
 //     let eligibleItemsCount = 0;
@@ -158,7 +156,7 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 //       if (isAvailable) {
 //         subTotal += finalAmount;
 //         productOfferDiscount += itemDiscount;
-        
+
 //         // 🔥 Track eligible amount for coupon
 //         if (!offerApplied) {
 //           eligibleForCouponTotal += originalAmount; // Add original amount for eligible items
@@ -216,9 +214,9 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 //       if (coupon) {
 //         // Check minimum cart value on eligible items only
 //         const minCartValue = Number(coupon.minCartValue) || 0;
-        
+
 //         if (eligibleForCouponTotal >= minCartValue) {
-          
+
 //           if (coupon.discountType === "PERCENTAGE") {
 //             // Calculate discount based on eligible items only
 //             let discount = (eligibleForCouponTotal * Number(coupon.discountValue || 0)) / 100;
@@ -230,7 +228,7 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 //             }
 
 //             couponDiscount = discount;
-            
+
 //             couponDetails = {
 //               type: "PERCENTAGE",
 //               value: coupon.discountValue,
@@ -242,12 +240,12 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 //             // Flat discount, but ensure it doesn't exceed eligible amount
 //             const flatDiscount = Number(coupon.discountValue || 0);
 //             couponDiscount = Math.min(flatDiscount, eligibleForCouponTotal);
-            
+
 //             couponDetails = {
 //               type: "FLAT",
 //               value: flatDiscount,
 //               calculatedOn: eligibleForCouponTotal,
-//               calculation: couponDiscount < flatDiscount 
+//               calculation: couponDiscount < flatDiscount
 //                 ? `Adjusted to ₹${couponDiscount} (cannot exceed eligible items total)`
 //                 : `Flat ₹${flatDiscount} discount applied`
 //             };
@@ -277,18 +275,18 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 //       // Calculate proportion of this item in the eligible subtotal
 //       // For items with offers, they don't get coupon discount
 //       let itemAfterCoupon = item.finalAmount;
-      
+
 //       if (appliedCoupon && !item.offerApplied) {
 //         // Only apply coupon proportion to eligible items (without offers)
-//         const eligibleProportion = eligibleForCouponTotal > 0 
-//           ? item.originalAmount / eligibleForCouponTotal 
+//         const eligibleProportion = eligibleForCouponTotal > 0
+//           ? item.originalAmount / eligibleForCouponTotal
 //           : 0;
 //         itemAfterCoupon = item.finalAmount - (couponDiscount * eligibleProportion);
 //       }
 
 //       const itemTax = Math.round((itemAfterCoupon * item.gstRate) / 100);
 //       taxAmount += itemTax;
-      
+
 //       itemizedTax.push({
 //         productId: item.productId,
 //         title: item.title,
@@ -317,26 +315,26 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 //         totalOriginalAmount,
 //         productOfferDiscount,
 //         subTotal, // After product offers, before coupon
-        
+
 //         // Coupon breakdown
 //         couponDiscount,
 //         finalSubTotal, // After all discounts
-        
+
 //         // Tax
-//         tax: { 
+//         tax: {
 //           amount: taxAmount,
-//           breakdown: itemizedTax 
+//           breakdown: itemizedTax
 //         },
-        
+
 //         // Shipping
 //         shippingFee,
 //         grandTotal,
 //         currency: "INR",
-        
+
 //         // Applied coupon info
 //         appliedCoupon,
 //         couponDetails,
-        
+
 //         // 🔥 NEW: Eligible items info
 //         couponEligibility: {
 //           eligibleAmount: eligibleForCouponTotal,
@@ -408,7 +406,6 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 //   }
 // };
 
-
 exports.getCart = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -426,7 +423,7 @@ exports.getCart = async (req, res) => {
 
     // 1️⃣ Fetch Saved Coupon (if exists)
     const savedCoupon = await CartCoupon.findOne({
-      where: { userId }
+      where: { userId },
     });
 
     const couponCode = savedCoupon?.couponCode || null;
@@ -438,7 +435,7 @@ exports.getCart = async (req, res) => {
         {
           model: Product,
           as: "product",
-          include: [{ model: ProductPrice, as: "price" }]
+          include: [{ model: ProductPrice, as: "price" }],
         },
         {
           model: ProductVariant,
@@ -446,19 +443,19 @@ exports.getCart = async (req, res) => {
           include: [
             {
               model: VariantImage,
-              as: "images",  // Include variant images
+              as: "images", // Include variant images
               attributes: ["id", "imageUrl"],
               limit: 5, // Limit to 5 images per variant
               // order: [["isPrimary", "DESC"]] // Primary images first
-            }
-          ]
+            },
+          ],
         },
-        { 
-          model: VariantSize, 
-          as: "variantSize" 
-        }
+        {
+          model: VariantSize,
+          as: "variantSize",
+        },
       ],
-      order: [["createdAt", "DESC"]]
+      order: [["createdAt", "DESC"]],
     });
 
     let itemsCount = cartItems.length;
@@ -467,7 +464,7 @@ exports.getCart = async (req, res) => {
     let subTotal = 0;
     let totalOriginalAmount = 0;
     let productOfferDiscount = 0;
-    
+
     // Track eligible amount for coupon (items without offers)
     let eligibleForCouponTotal = 0; // Original amount of items without offers
     let eligibleItemsCount = 0;
@@ -478,28 +475,25 @@ exports.getCart = async (req, res) => {
       where: {
         isActive: true,
         startDate: { [Op.lte]: now },
-        endDate: { [Op.gte]: now }
+        endDate: { [Op.gte]: now },
       },
       include: [
         { model: OfferSub, as: "subOffers" },
-        { model: OfferApplicableProduct, as: "offerApplicableProducts" }
-      ]
+        { model: OfferApplicableProduct, as: "offerApplicableProducts" },
+      ],
     });
 
     const processedItems = [];
 
     // 4️⃣ Process Each Cart Item (Product Offers)
     for (let item of cartItems) {
-
       const sellingPrice = Number(item.product?.price?.sellingPrice || 0);
       const gstRate = Number(item.product?.gstRate || 0);
       const quantity = item.quantity;
       const currentStock = item.variantSize?.stock || 0;
 
       const isAvailable = currentStock > 0;
-      const validQuantity = isAvailable
-        ? Math.min(quantity, currentStock)
-        : 0;
+      const validQuantity = isAvailable ? Math.min(quantity, currentStock) : 0;
 
       totalQuantity += validQuantity;
 
@@ -513,12 +507,23 @@ exports.getCart = async (req, res) => {
       // Offer Check
       for (let offer of activeOffers) {
         const isProductEligible = offer.offerApplicableProducts.some(
-          p => p.productId === item.productId
+          (p) => p.productId === item.productId,
         );
 
         if (!isProductEligible) continue;
 
-        const subOffer = offer.subOffers[0];
+        // const subOffer = offer.subOffers[0];
+        // if (!subOffer) continue;
+        const applicableProduct = offer.offerApplicableProducts.find(
+          (p) => p.productId === item.productId,
+        );
+
+        if (!applicableProduct) continue;
+
+        const subOffer = offer.subOffers.find(
+          (s) => s.id === applicableProduct.subOfferId,
+        );
+
         if (!subOffer) continue;
 
         if (originalAmount < subOffer.minOrderValue) continue;
@@ -534,13 +539,13 @@ exports.getCart = async (req, res) => {
           offerDetails = {
             type: "PERCENTAGE",
             value: subOffer.discountValue,
-            maxDiscount: subOffer.maxDiscount
+            maxDiscount: subOffer.maxDiscount,
           };
         } else if (subOffer.discountType === "FLAT") {
           itemDiscount = subOffer.discountValue;
           offerDetails = {
             type: "FLAT",
-            value: subOffer.discountValue
+            value: subOffer.discountValue,
           };
         }
 
@@ -553,7 +558,7 @@ exports.getCart = async (req, res) => {
       if (isAvailable) {
         subTotal += finalAmount;
         productOfferDiscount += itemDiscount;
-        
+
         // Track eligible amount for coupon
         if (!offerApplied) {
           eligibleForCouponTotal += originalAmount; // Add original amount for eligible items
@@ -565,7 +570,7 @@ exports.getCart = async (req, res) => {
 
       // Process images
       const images = item.variant?.images || [];
-      const primaryImage = images.find(img => img.isPrimary) || images[0];
+      const primaryImage = images.find((img) => img.isPrimary) || images[0];
 
       processedItems.push({
         cartId: item.id,
@@ -580,18 +585,18 @@ exports.getCart = async (req, res) => {
           size: item.variantSize?.size,
           stock: currentStock,
           status: isAvailable ? "In Stock" : "Out of Stock",
-          isAvailable
+          isAvailable,
         },
 
         // 🖼️ IMAGES - NEW FIELDS
         images: {
-          all: images.map(img => ({
+          all: images.map((img) => ({
             id: img.id,
             url: img.imageUrl,
-            isPrimary: img.isPrimary
+            isPrimary: img.isPrimary,
           })),
           primary: primaryImage?.imageUrl || null,
-          count: images.length
+          count: images.length,
         },
 
         // For backward compatibility
@@ -604,7 +609,7 @@ exports.getCart = async (req, res) => {
         finalAmount,
         gstRate,
         offerApplied,
-        offerDetails // Include offer details if applied
+        offerDetails, // Include offer details if applied
       });
     }
 
@@ -622,19 +627,20 @@ exports.getCart = async (req, res) => {
           code: couponCode,
           isActive: true,
           startDate: { [Op.lte]: now },
-          endDate: { [Op.gte]: now }
-        }
+          endDate: { [Op.gte]: now },
+        },
       });
 
       if (coupon) {
         // Check minimum cart value on eligible items only
         const minCartValue = Number(coupon.minCartValue) || 0;
-        
+
         if (eligibleForCouponTotal >= minCartValue) {
-          
           if (coupon.discountType === "PERCENTAGE") {
             // Calculate discount based on eligible items only
-            let discount = (eligibleForCouponTotal * Number(coupon.discountValue || 0)) / 100;
+            let discount =
+              (eligibleForCouponTotal * Number(coupon.discountValue || 0)) /
+              100;
 
             // Apply max discount cap if exists
             const maxDiscount = Number(coupon.maxDiscount || 0);
@@ -643,33 +649,36 @@ exports.getCart = async (req, res) => {
             }
 
             couponDiscount = discount;
-            
+
             couponDetails = {
               type: "PERCENTAGE",
               value: coupon.discountValue,
               maxDiscount: maxDiscount || null,
               calculatedOn: eligibleForCouponTotal,
-              calculation: `${coupon.discountValue}% of ₹${eligibleForCouponTotal} = ₹${discount}`
+              calculation: `${coupon.discountValue}% of ₹${eligibleForCouponTotal} = ₹${discount}`,
             };
           } else if (coupon.discountType === "FLAT") {
             // Flat discount, but ensure it doesn't exceed eligible amount
             const flatDiscount = Number(coupon.discountValue || 0);
             couponDiscount = Math.min(flatDiscount, eligibleForCouponTotal);
-            
+
             couponDetails = {
               type: "FLAT",
               value: flatDiscount,
               calculatedOn: eligibleForCouponTotal,
-              calculation: couponDiscount < flatDiscount 
-                ? `Adjusted to ₹${couponDiscount} (cannot exceed eligible items total)`
-                : `Flat ₹${flatDiscount} discount applied`
+              calculation:
+                couponDiscount < flatDiscount
+                  ? `Adjusted to ₹${couponDiscount} (cannot exceed eligible items total)`
+                  : `Flat ₹${flatDiscount} discount applied`,
             };
           }
 
           appliedCoupon = coupon.code;
         } else {
           // Coupon exists but doesn't meet min cart value on eligible items
-          console.log(`Coupon ${couponCode} requires ₹${minCartValue} on eligible items, but only ₹${eligibleForCouponTotal} available`);
+          console.log(
+            `Coupon ${couponCode} requires ₹${minCartValue} on eligible items, but only ₹${eligibleForCouponTotal} available`,
+          );
         }
       }
     }
@@ -690,24 +699,26 @@ exports.getCart = async (req, res) => {
       // Calculate proportion of this item in the eligible subtotal
       // For items with offers, they don't get coupon discount
       let itemAfterCoupon = item.finalAmount;
-      
+
       if (appliedCoupon && !item.offerApplied) {
         // Only apply coupon proportion to eligible items (without offers)
-        const eligibleProportion = eligibleForCouponTotal > 0 
-          ? item.originalAmount / eligibleForCouponTotal 
-          : 0;
-        itemAfterCoupon = item.finalAmount - (couponDiscount * eligibleProportion);
+        const eligibleProportion =
+          eligibleForCouponTotal > 0
+            ? item.originalAmount / eligibleForCouponTotal
+            : 0;
+        itemAfterCoupon =
+          item.finalAmount - couponDiscount * eligibleProportion;
       }
 
       const itemTax = Math.round((itemAfterCoupon * item.gstRate) / 100);
       taxAmount += itemTax;
-      
+
       itemizedTax.push({
         productId: item.productId,
         title: item.title,
         baseAmount: itemAfterCoupon,
         gstRate: item.gstRate,
-        taxAmount: itemTax
+        taxAmount: itemTax,
       });
     }
 
@@ -722,7 +733,7 @@ exports.getCart = async (req, res) => {
     return res.status(200).json({
       success: true,
       data: {
-        items: processedItems
+        items: processedItems,
       },
       summary: {
         // Cart totals
@@ -731,49 +742,48 @@ exports.getCart = async (req, res) => {
         totalOriginalAmount,
         productOfferDiscount,
         subTotal, // After product offers, before coupon
-        
+
         // Coupon breakdown
         couponDiscount,
         finalSubTotal, // After all discounts
-        
+
         // Tax
-        tax: { 
+        tax: {
           amount: taxAmount,
-          breakdown: itemizedTax 
+          breakdown: itemizedTax,
         },
-        
+
         // Shipping
         shippingFee,
         grandTotal,
         currency: "INR",
-        
+
         // Applied coupon info
         appliedCoupon,
         couponDetails,
-        
+
         // Eligible items info
         couponEligibility: {
           eligibleAmount: eligibleForCouponTotal,
           eligibleItemsCount,
           itemsWithOffersCount,
           meetsMinCartValue: appliedCoupon ? true : false,
-          requiredMinValue: appliedCoupon ? Number(couponDetails?.minCartValue || 0) : null
+          requiredMinValue: appliedCoupon
+            ? Number(couponDetails?.minCartValue || 0)
+            : null,
         },
 
         canCheckout:
           processedItems.length > 0 &&
-          processedItems.every(
-            i => i.variant.isAvailable && i.quantity > 0
-          )
-      }
+          processedItems.every((i) => i.variant.isAvailable && i.quantity > 0),
+      },
     });
-
   } catch (error) {
     console.error("Get Cart Error:", error);
     return res.status(500).json({
       success: false,
       message: "Something went wrong",
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -847,15 +857,15 @@ exports.addToCart = async (req, res) => {
 
       // Update existing item quantity
       await existingItem.increment("quantity", { by: quantity });
-      
-      return res.json({ 
-        success: true, 
+
+      return res.json({
+        success: true,
         message: `Added ${quantity} item(s) to cart`,
         data: {
           cartItemId: existingItem.id,
           newQuantity: existingItem.quantity + quantity,
-          action: 'updated'
-        }
+          action: "updated",
+        },
       });
     } else {
       // Create new cart item
@@ -867,22 +877,21 @@ exports.addToCart = async (req, res) => {
         quantity,
       });
 
-      return res.json({ 
-        success: true, 
+      return res.json({
+        success: true,
         message: `Added ${quantity} item(s) to cart`,
         data: {
           cartItemId: newItem.id,
           quantity: newItem.quantity,
-          action: 'created'
-        }
+          action: "created",
+        },
       });
     }
-
   } catch (error) {
     console.error("Add to Cart Error:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: error.message 
+    res.status(500).json({
+      success: false,
+      message: error.message,
     });
   }
 };
@@ -903,21 +912,21 @@ exports.incrementCartQuantity = async (req, res) => {
           model: VariantSize,
           as: "variantSize",
           where: { id: sizeId },
-          attributes: ['stock']
-        }
-      ]
+          attributes: ["stock"],
+        },
+      ],
     });
 
     if (!item) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Item not found in cart" 
+      return res.status(404).json({
+        success: false,
+        message: "Item not found in cart",
       });
     }
 
     // Check stock availability
     const newQuantity = item.quantity + 1;
-    
+
     if (item.variantSize && item.variantSize.stock < newQuantity) {
       return res.status(400).json({
         success: false,
@@ -928,27 +937,25 @@ exports.incrementCartQuantity = async (req, res) => {
     // Increment quantity
     await item.increment("quantity", { by: 1 });
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: "Quantity increased",
       data: {
         cartItemId: item.id,
         newQuantity: item.quantity + 1,
         productId,
         variantId,
-        sizeId
-      }
+        sizeId,
+      },
     });
-
   } catch (error) {
     console.error("Increment Cart Quantity Error:", error);
-    res.status(500).json({ 
-      success: false, 
-      message: error.message 
+    res.status(500).json({
+      success: false,
+      message: error.message,
     });
   }
 };
-
 
 exports.decreaseQuantity = async (req, res) => {
   try {
@@ -972,8 +979,6 @@ exports.decreaseQuantity = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
-
-
 
 exports.mergeGuestCart = async (req, res) => {
   const transaction = await CartItem.sequelize.transaction();
