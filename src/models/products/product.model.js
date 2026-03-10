@@ -60,6 +60,10 @@ Product.init(
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },
+    wishlistCount: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+    },
   },
   {
     sequelize,

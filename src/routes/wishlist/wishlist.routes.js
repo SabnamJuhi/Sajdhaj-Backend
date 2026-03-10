@@ -7,4 +7,6 @@ router.get("/", protected, ctrl.getWishlist);
 router.delete("/:id", protected, ctrl.removeFromWishlist);
 router.delete("/clear/all", protected, ctrl.clearWishlist);
 
+router.get("/top-wishlisted", ctrl.getTopWishlistedProducts);
+
 module.exports = router;

@@ -6,11 +6,49 @@ const {
   VariantImage,
   VariantSize,
   ProductSpec,
+  Category,
+  SubCategory,
+  ProductCategory,
+  ProductRating,
 } = require("../../models");
 const {
   getPaginationOptions,
   formatPagination,
 } = require("../../utils/paginate");
+const sequelize = require("../../config/db");
+
+// exports.addToWishlist = async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+//     const { productId, variantId } = req.body;
+
+//     // check duplicate
+//     const exists = await Wishlist.findOne({
+//       where: { userId, productId, variantId: variantId || null },
+//     });
+
+//     if (exists) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Already in wishlist",
+//       });
+//     }
+
+//     const wishlist = await Wishlist.create({
+//       userId,
+//       productId,
+//       variantId: variantId || null,
+//     });
+
+//     res.json({
+//       success: true,
+//       message: "Added to wishlist",
+//       data: wishlist,
+//     });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
 
 exports.addToWishlist = async (req, res) => {
   try {
@@ -35,6 +73,12 @@ exports.addToWishlist = async (req, res) => {
       variantId: variantId || null,
     });
 
+    // ⭐ increment product wishlist counter
+    await Product.increment("wishlistCount", {
+      by: 1,
+      where: { id: productId },
+    });
+
     res.json({
       success: true,
       message: "Added to wishlist",
@@ -48,7 +92,7 @@ exports.addToWishlist = async (req, res) => {
 exports.getWishlist = async (req, res) => {
   try {
     const userId = req.user.id;
-     const paginationOptions = getPaginationOptions(req.query);
+    const paginationOptions = getPaginationOptions(req.query);
     const wishlistItems = await Wishlist.findAndCountAll({
       where: { userId },
 
@@ -74,7 +118,13 @@ exports.getWishlist = async (req, res) => {
         /* ---------- VARIANT ---------- */
         {
           model: ProductVariant,
-          attributes: ["id", "colorName", "colorCode", "totalStock", "stockStatus"],
+          attributes: [
+            "id",
+            "colorName",
+            "colorCode",
+            "totalStock",
+            "stockStatus",
+          ],
           include: [
             {
               model: VariantImage,
@@ -92,7 +142,7 @@ exports.getWishlist = async (req, res) => {
         },
       ],
       order: [["createdAt", "DESC"]],
-       distinct: true, 
+      distinct: true,
       ...paginationOptions,
     });
 
@@ -152,14 +202,14 @@ exports.getWishlist = async (req, res) => {
         },
       };
     });
- /* ---------- FORMAT PAGINATION ---------- */
+    /* ---------- FORMAT PAGINATION ---------- */
     const response = formatPagination(
       {
         count: wishlistItems.count,
         rows: formattedWishlist,
       },
       paginationOptions.currentPage,
-      paginationOptions.limit
+      paginationOptions.limit,
     );
 
     return res.json({
@@ -174,13 +224,39 @@ exports.getWishlist = async (req, res) => {
   }
 };
 
+// exports.removeFromWishlist = async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+//     const { id } = req.params;
+
+//     const item = await Wishlist.findOne({ where: { id, userId } });
+
+//     if (!item) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Wishlist item not found",
+//       });
+//     }
+
+//     await item.destroy();
+
+//     res.json({
+//       success: true,
+//       message: "Removed from wishlist",
+//     });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
 
 exports.removeFromWishlist = async (req, res) => {
   try {
     const userId = req.user.id;
     const { id } = req.params;
 
-    const item = await Wishlist.findOne({ where: { id, userId } });
+    const item = await Wishlist.findOne({
+      where: { id, userId },
+    });
 
     if (!item) {
       return res.status(404).json({
@@ -189,17 +265,29 @@ exports.removeFromWishlist = async (req, res) => {
       });
     }
 
+    const productId = item.productId; // store before deleting
+
     await item.destroy();
+
+    await Product.decrement("wishlistCount", {
+      by: 1,
+      where: {
+        id: productId,
+        wishlistCount: { [Op.gt]: 0 },
+      },
+    });
 
     res.json({
       success: true,
       message: "Removed from wishlist",
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
   }
 };
-
 exports.clearWishlist = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -212,5 +300,119 @@ exports.clearWishlist = async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// exports.getTopWishlistedProducts = async (req, res) => {
+//   try {
+
+//     const products = await Product.findAll({
+//       attributes: [
+//         "id",
+//         "title",
+//         "brandName",
+//         "wishlistCount"
+//       ],
+//       where: {
+//         isActive: true
+//       },
+//       order: [["wishlistCount", "DESC"]],
+//       limit: 10
+//     });
+
+//     res.json({
+//       success: true,
+//       data: products
+//     });
+
+//   } catch (error) {
+//     res.status(500).json({
+//       success: false,
+//       message: error.message
+//     });
+//   }
+// };
+
+
+exports.getTopWishlistedProducts = async (req, res) => {
+  try {
+
+    const products = await Product.findAll({
+      where: {
+        isActive: true
+      },
+
+      attributes: [
+        "id",
+        "sku",
+        "title",
+        "description",
+        "brandName",
+        "badge",
+        "gstRate",
+        "wishlistCount",
+        "createdAt"
+      ],
+
+      include: [
+        { model: Category, as: "Category", attributes: ["id", "name"] },
+        { model: SubCategory, as: "SubCategory", attributes: ["id", "name"] },
+        { model: ProductCategory, as: "ProductCategory", attributes: ["id", "name"] },
+
+        { model: ProductPrice, as: "price" },
+
+        {
+          model: ProductVariant,
+          as: "variants",
+          attributes: [
+            "id",
+            "variantCode",
+            "colorName",
+            "colorCode",
+            "colorSwatch",
+            "totalStock",
+            "stockStatus",
+          ],
+          include: [
+            {
+              model: VariantImage,
+              as: "images",
+              attributes: ["id", "imageUrl"],
+            },
+            {
+              model: VariantSize,
+              as: "sizes",
+              attributes: ["id", "size", "stock"],
+            },
+          ],
+        },
+
+        {
+          model: ProductRating,
+          as: "rating",
+          attributes: [
+            "averageRating",
+            "totalRatings",
+            "totalReviews"
+          ],
+        }
+      ],
+
+      order: [["wishlistCount", "DESC"]],
+      limit: 10
+    });
+
+    res.json({
+      success: true,
+      data: products
+    });
+
+  } catch (error) {
+    console.error("TOP WISHLISTED ERROR:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
   }
 };
