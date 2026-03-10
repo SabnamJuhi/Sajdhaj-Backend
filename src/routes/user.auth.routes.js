@@ -36,6 +36,7 @@ const {
   getUserById,
   deleteUser,
   logout,
+  getProfile,
 } = require("../controllers/user.auth.controller");
 const { protect } = require("../middleware/user.auth.middleware");
 const {protected} = require("../middleware/user.logout.middleware")
@@ -52,6 +53,7 @@ router.delete("/users/:id", protected, deleteUser);
 router.post("/logout", protected, logout);
 router.get("/users", adminAuth, getUsers);
 router.get("/users/:id", protected, getUserById);
+router.get("/me", protected, getProfile);
 
 // Forgot-password
 router.post("/forgotPassword", forgotPassword);

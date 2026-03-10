@@ -253,3 +253,23 @@ exports.logout = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
+exports.getProfile = async (req, res) => {
+  try {
+
+    const user = await User.findByPk(req.user.id, {
+      attributes: { exclude: ["password"] }
+    });
+
+    res.json({
+      success: true,
+      user
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      message: error.message
+    });
+  }
+};

@@ -6,12 +6,10 @@ const sequelize = require("../config/db");
 //   email: { type: DataTypes.STRING, allowNull: false, unique: true },
 //   googleId: { type: DataTypes.STRING, unique: true },
 //   mobileNumber: { type: DataTypes.STRING, allowNull: true },
-//   password: { type: DataTypes.STRING, allowNull: true } 
+//   password: { type: DataTypes.STRING, allowNull: true }
 // });
 
 // module.exports = User;
-
-
 
 class User extends Model {}
 
@@ -20,39 +18,43 @@ User.init(
     id: {
       type: DataTypes.INTEGER,
       primaryKey: true,
-      autoIncrement: true
+      autoIncrement: true,
     },
 
     userName: {
       type: DataTypes.STRING,
-      allowNull: false
+      allowNull: false,
     },
 
     email: {
       type: DataTypes.STRING,
       allowNull: false,
-      unique: true
+      unique: true,
     },
 
     mobileNumber: {
       type: DataTypes.STRING,
-      allowNull: true
+      allowNull: true,
     },
 
     password: {
       type: DataTypes.STRING,
-      allowNull: true // null for Google users
+      allowNull: true, // null for Google users
     },
 
     googleId: {
       type: DataTypes.STRING,
-      allowNull: true
-    }
+      allowNull: true,
+    },
+    avatar: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
   },
   {
     sequelize,
-    modelName: "User"
-  }
+    modelName: "User",
+  },
 );
 
 module.exports = User;
