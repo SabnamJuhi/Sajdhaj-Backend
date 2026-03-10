@@ -6,31 +6,25 @@ const ProductPrice = require("../../models/products/price.model");
 const ProductSpec = require("../../models/products/productSpec.model");
 const ProductVariant = require("../../models/productVariants/productVariant.model");
 const VariantSize = require("../../models/productVariants/variantSize.model");
-
-/**
- * EXPECTED EXCEL COLUMNS:
- * title | brandName | categoryId | subCategoryId | productCategoryId |
- * description | badge | gstRate | mrp | sellingPrice |
- * colorName | colorCode | size | stock | chest
- */
+const VariantImage = require("../../models/productVariants/variantImage.model");
 
 exports.bulkCreateProductsFromExcel = async (req, res) => {
   const t = await sequelize.transaction();
 
   try {
-    if (!req.file) throw new Error("Excel file is required");
+    if (!req.file) throw new Error("Excel file required");
 
     const workbook = xlsx.readFile(req.file.path);
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const rows = xlsx.utils.sheet_to_json(sheet);
 
-    if (!rows.length) throw new Error("Excel sheet is empty");
+    if (!rows.length) throw new Error("Excel is empty");
 
-    const createdProducts = [];
+    const productCache = {};
+    const variantCache = {};
 
     for (const row of rows) {
+
       const {
         title,
         brandName,
@@ -42,106 +36,141 @@ exports.bulkCreateProductsFromExcel = async (req, res) => {
         gstRate,
         mrp,
         sellingPrice,
+        specs,
+        variantCode,
         colorName,
         colorCode,
+        colorSwatch,
         size,
         stock,
         chest,
-         ...specColumns 
+        // imageUrls
       } = row;
 
-      if (!title || !categoryId || !subCategoryId || !productCategoryId) {
-        throw new Error(`Missing required fields for product: ${title}`);
-      }
+      if (!title || !categoryId || !subCategoryId || !productCategoryId)
+        throw new Error(`Missing fields for ${title}`);
 
-      const numericGst = Number(gstRate);
-      if (isNaN(numericGst)) throw new Error(`Invalid GST for ${title}`);
+      let product;
 
-      /* -------- CREATE PRODUCT -------- */
-      const product = await Product.create(
-        {
+      /* ---------------- PRODUCT ---------------- */
+
+      if (!productCache[title]) {
+
+        product = await Product.create({
           title,
           brandName,
-          categoryId: Number(categoryId),
-          subCategoryId: Number(subCategoryId),
-          productCategoryId: Number(productCategoryId),
+          categoryId,
+          subCategoryId,
+          productCategoryId,
           description,
           badge,
-          gstRate: numericGst,
-        },
-        { transaction: t }
-      );
+          gstRate
+        }, { transaction: t });
 
-      /* -------- PRICE -------- */
-      await ProductPrice.create(
-        {
+        productCache[title] = product;
+
+        /* -------- PRICE -------- */
+
+        await ProductPrice.create({
           productId: product.id,
-          mrp: Number(mrp),
-          sellingPrice: Number(sellingPrice),
+          mrp,
+          sellingPrice,
           discountPercentage:
             mrp > sellingPrice
               ? Math.round(((mrp - sellingPrice) / mrp) * 100)
               : 0,
-          currency: "INR",
-        },
-        { transaction: t }
-      );
-       /* -------- PRODUCT SPECS (NEW) -------- */
-      const specRows = Object.entries(specColumns)
-        .filter(([key, value]) => value !== undefined && value !== "")
-        .map(([key, value]) => ({
-          productId: product.id,
-          specKey: key,
-          specValue: String(value),
-        }));
+          currency: "INR"
+        }, { transaction: t });
 
-      if (specRows.length) {
-        await ProductSpec.bulkCreate(specRows, { transaction: t });
+        /* -------- SPECS JSON -------- */
+
+        if (specs) {
+
+          let parsedSpecs = specs;
+
+          if (typeof specs === "string") {
+            parsedSpecs = JSON.parse(specs);
+          }
+
+          const specRows = Object.entries(parsedSpecs).map(([key, value]) => ({
+            productId: product.id,
+            specKey: key,
+            specValue: String(value)
+          }));
+
+          await ProductSpec.bulkCreate(specRows, { transaction: t });
+        }
+
+      } else {
+        product = productCache[title];
       }
 
-      /* -------- VARIANT -------- */
-      const variant = await ProductVariant.create(
-        {
+      /* ---------------- VARIANT ---------------- */
+
+      let variant;
+
+      const variantKey = `${product.id}_${variantCode}`;
+
+      if (!variantCache[variantKey]) {
+
+        variant = await ProductVariant.create({
           productId: product.id,
-          variantCode: `VAR-${product.id}`,
+          variantCode,
           colorName,
           colorCode,
-          totalStock: Number(stock) || 0,
-          stockStatus: stock > 0 ? "In Stock" : "Out of Stock",
-        },
-        { transaction: t }
-      );
+          colorSwatch,
+          totalStock: stock || 0,
+          stockStatus: stock > 0 ? "In Stock" : "Out of Stock"
+        }, { transaction: t });
 
-      /* -------- SIZE -------- */
-      await VariantSize.create(
-        {
-          variantId: variant.id,
-          size,
-          stock: Number(stock) || 0,
-          chest: chest || null,
-        },
-        { transaction: t }
-      );
+        variantCache[variantKey] = variant;
 
-      createdProducts.push(product.id);
+        // /* -------- IMAGES -------- */
+
+        // if (imageUrls) {
+
+        //   const urls = imageUrls.split(",");
+
+        //   await VariantImage.bulkCreate(
+        //     urls.map(url => ({
+        //       variantId: variant.id,
+        //       imageUrl: url.trim()
+        //     })),
+        //     { transaction: t }
+        //   );
+        // }
+
+      } else {
+        variant = variantCache[variantKey];
+      }
+
+      /* ---------------- SIZE ---------------- */
+
+      await VariantSize.create({
+        variantId: variant.id,
+        size,
+        stock: stock || 0,
+        chest: chest || null
+      }, { transaction: t });
+
     }
 
     await t.commit();
 
-    return res.json({
+    res.json({
       success: true,
-      message: "Bulk products created successfully",
-      totalCreated: createdProducts.length,
-      productIds: createdProducts,
+      message: "Bulk upload completed"
     });
+
   } catch (error) {
+
     await t.rollback();
 
-    console.error("BULK UPLOAD ERROR:", error);
+    console.error(error);
 
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.message
     });
   }
 };
