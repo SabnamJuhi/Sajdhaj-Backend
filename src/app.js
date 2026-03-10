@@ -59,6 +59,8 @@ app.use("/api/search", require("./routes/searchServices/searchServices.routes"))
 
 app.use("/api/shipping", require("./routes/shippingFee/shipping.routes"))
 
+app.use("/api/topListedProduct", require("./routes/topListedProducts/topListedProducts.routes"))
+
 
 app.use((err, req, res, next) => {
   console.error("GLOBAL ERROR:", err);

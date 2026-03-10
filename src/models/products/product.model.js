@@ -64,6 +64,11 @@ Product.init(
       type: DataTypes.INTEGER,
       defaultValue: 0,
     },
+    soldCount: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
   },
   {
     sequelize,
