@@ -13,7 +13,7 @@ exports.createOccasionalBanner = async (req, res) => {
     }
 
     const { title, subtitle, description, cta, link, occasionType, startDate, endDate, discountPercentage } = req.body;
-    const imagePath = `/uploads/occasional-banners/${req.file.filename}`;
+    const imagePath = `/uploads/products/${req.file.filename}`;
 
     const banner = await OccasionalBanner.create({
       title,
@@ -32,7 +32,7 @@ exports.createOccasionalBanner = async (req, res) => {
   } catch (err) {
     // Clean up uploaded file if error
     if (req.file) {
-      const filePath = path.join(__dirname, "../../uploads/occasional-banners/", req.file.filename);
+      const filePath = path.join(__dirname, "../../uploads/products/", req.file.filename);
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
     
@@ -113,7 +113,7 @@ exports.updateOccasionalBanner = async (req, res) => {
         const oldImagePath = path.join(__dirname, "../../", banner.imageUrl);
         if (fs.existsSync(oldImagePath)) fs.unlinkSync(oldImagePath);
       }
-      banner.imageUrl = `/uploads/occasional-banners/${req.file.filename}`;
+      banner.imageUrl = `/uploads/products/${req.file.filename}`;
     }
 
     const { title, subtitle, description, cta, link, occasionType, startDate, endDate, discountPercentage, isActive } = req.body;

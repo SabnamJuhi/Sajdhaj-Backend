@@ -12,7 +12,7 @@ exports.createCollectionBanner = async (req, res) => {
     }
 
     const { title, subtitle, description, cta, link, collectionType, productCount } = req.body;
-    const imagePath = `/uploads/collection-banners/${req.file.filename}`;
+    const imagePath = `/uploads/products/${req.file.filename}`;
 
     const banner = await CollectionBanner.create({
       title,
@@ -29,7 +29,7 @@ exports.createCollectionBanner = async (req, res) => {
   } catch (err) {
     // Clean up uploaded file if error
     if (req.file) {
-      const filePath = path.join(__dirname, "../../uploads/collection-banners/", req.file.filename);
+      const filePath = path.join(__dirname, "../../uploads/products/", req.file.filename);
       if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
     
@@ -99,7 +99,7 @@ exports.updateCollectionBanner = async (req, res) => {
         const oldImagePath = path.join(__dirname, "../../", banner.imageUrl);
         if (fs.existsSync(oldImagePath)) fs.unlinkSync(oldImagePath);
       }
-      banner.imageUrl = `/uploads/collection-banners/${req.file.filename}`;
+      banner.imageUrl = `/uploads/products/${req.file.filename}`;
     }
 
     const { title, subtitle, description, cta, link, collectionType, productCount, isActive } = req.body;
