@@ -1,3 +1,255 @@
+// const { Op } = require("sequelize");
+
+// const Product = require("../../models/products/product.model");
+// const ProductPrice = require("../../models/products/price.model");
+// const ProductSpec = require("../../models/products/productSpec.model");
+// const ProductVariant = require("../../models/productVariants/productVariant.model");
+// const VariantSize = require("../../models/productVariants/variantSize.model");
+// const VariantImage = require("../../models/productVariants/variantImage.model");
+// const Category = require("../../models/category/category.model");
+// const SubCategory = require("../../models/category/subcategory.model");
+// const Wishlist = require("../../models/wishlist.model");
+// const {
+//   getPaginationOptions,
+//   formatPagination,
+// } = require("../../utils/paginate");
+
+// exports.getFilteredProducts = async (req, res) => {
+//   try {
+//     const {
+//       categoryId,
+//       subCategoryId,
+//       productCategoryId,
+//       brands,
+//       colors,
+//       sizes,
+//       minPrice,
+//       maxPrice,
+//       inStock,
+//       specs,
+//     } = req.query;
+//     const userId = req.user?.id;
+//     const paginationOptions = getPaginationOptions(req.query);
+//     const { limit, offset, currentPage } = paginationOptions;
+//     const toArray = (val) => (val ? val.split(",").map((v) => v.trim()) : []);
+
+//     /* ---------- product where ---------- */
+//    const productWhere = {};
+
+// if (req.query.isActive !== undefined) {
+//   productWhere.isActive = req.query.isActive === "true";
+// }
+
+//     /* ---------- CATEGORY + SUBCATEGORY + PRODUCTCATEGORY (FIXED LOGIC) ---------- */
+
+// const categories = toArray(categoryId).map(Number);
+// const subCategories = toArray(subCategoryId).map(Number);
+// const productCategories = toArray(productCategoryId).map(Number);
+
+// if (categories.length) {
+//   const orConditions = [];
+
+//   categories.forEach((catId) => {
+//     const condition = { categoryId: catId };
+
+//     // Apply subCategory & productCategory filters ONLY if they exist
+//     if (subCategories.length) {
+//       condition.subCategoryId = { [Op.in]: subCategories };
+//     }
+
+//     if (productCategories.length) {
+//       condition.productCategoryId = { [Op.in]: productCategories };
+//     }
+
+//     orConditions.push(condition);
+//   });
+
+//   productWhere[Op.or] = orConditions;
+// }
+
+//     if (brands) productWhere.brandName = { [Op.in]: toArray(brands) };
+
+//     /* ---------- price ---------- */
+//     const priceWhere = {};
+//     if (minPrice || maxPrice) {
+//       priceWhere.sellingPrice = {};
+//       if (minPrice) priceWhere.sellingPrice[Op.gte] = Number(minPrice);
+//       if (maxPrice) priceWhere.sellingPrice[Op.lte] = Number(maxPrice);
+//     }
+
+//     /* ---------- spec FILTER include (for WHERE) ---------- */
+//     const specFilterIncludes = [];
+
+//     if (specs && typeof specs === "object") {
+//       Object.entries(specs).forEach(([key, value]) => {
+//         const values = toArray(value);
+
+//         specFilterIncludes.push({
+//           model: ProductSpec,
+//           as: "specs",
+//           attributes: [], //  used only for filtering
+//           where: {
+//             specKey: key,
+//             specValue: {
+//               [Op.or]: values.map((v) => ({ [Op.like]: `%${v}%` })),
+//             },
+//           },
+//           required: true,
+//         });
+//       });
+//     }
+
+//     /* ---------- MAIN QUERY ---------- */
+//     const products = await Product.findAll({
+//       where: productWhere,
+//       attributes: [
+//         "id",
+//         "sku",
+//         "title",
+//         "brandName",
+//         "badge",
+//         "isActive",
+//         "createdAt",
+//       ],
+//       include: [
+//         /* CATEGORY */
+//         {
+//           model: Category,
+//           as: "Category",
+//           attributes: ["id", "name"],
+//         },
+
+//         /* SUBCATEGORY */
+//         {
+//           model: SubCategory,
+//           as: "SubCategory",
+//           attributes: ["id", "name"],
+//         },
+
+//         /* PRICE */
+//         {
+//           model: ProductPrice,
+//           as: "price",
+//           where: Object.keys(priceWhere).length ? priceWhere : undefined,
+//           required: Object.keys(priceWhere).length > 0,
+//         },
+
+//         /* ALL SPECS (always returned) */
+//         {
+//           model: ProductSpec,
+//           as: "specs",
+//           attributes: ["id", "specKey", "specValue"],
+//           required: false,
+//         },
+
+//         /* VARIANTS */
+//         {
+//           model: ProductVariant,
+//           as: "variants",
+//           where: { isActive: true },
+//           required: false,
+//           include: [
+//             {
+//               model: VariantImage,
+//               as: "images",
+//               attributes: ["id", "imageUrl"],
+//               required: false,
+//             },
+//             {
+//               model: VariantSize,
+//               as: "sizes",
+//               required: false,
+//             },
+//           ],
+//         },
+
+//         /* SPEC FILTERING JOIN */
+//         ...specFilterIncludes,
+//       ],
+
+//       order: [["createdAt", "DESC"]],
+//       distinct: true,
+//     });
+
+//     /* ---------- POST FILTERS ---------- */
+//     let filteredProducts = products;
+
+//     if (colors) {
+//       const colorArray = toArray(colors).map((c) => c.toLowerCase());
+//       filteredProducts = filteredProducts.filter((p) =>
+//         p.variants.some((v) =>
+//           colorArray.includes((v.colorName || "").toLowerCase()),
+//         ),
+//       );
+//     }
+
+//     if (sizes) {
+//       const sizeArray = toArray(sizes);
+//       filteredProducts = filteredProducts.filter((p) =>
+//         p.variants.some((v) => v.sizes.some((s) => sizeArray.includes(s.size))),
+//       );
+//     }
+
+//     if (inStock === "true") {
+//       filteredProducts = filteredProducts.filter((p) =>
+//         p.variants.some(
+//           (v) => v.totalStock > 0 && v.sizes.some((s) => s.stock > 0),
+//         ),
+//       );
+//     }
+//     let wishlistedMap = {};
+
+//     if (userId) {
+//       const wishlist = await Wishlist.findAll({
+//         where: { userId },
+//         attributes: ["productId", "variantId"],
+//       });
+
+//       wishlist.forEach((w) => {
+//         if (!wishlistedMap[w.productId]) {
+//           wishlistedMap[w.productId] = [];
+//         }
+//         wishlistedMap[w.productId].push(w.variantId);
+//       });
+//     }
+
+//     const finalProducts = filteredProducts.map((p) => {
+//       const productWishlisted = !!wishlistedMap[p.id];
+//             return {
+//             ...p.toJSON(),
+//             isWishlisted: productWishlisted,
+//             wishlistedVariants: wishlistedMap[p.id] || [],
+//       };
+//     });
+//      /* ---------- MANUAL PAGINATION ---------- */
+//     const totalCount = finalProducts.length;
+
+//     const paginatedRows = finalProducts.slice(offset, offset + limit);
+
+//     const response = formatPagination(
+//       { count: totalCount, rows: paginatedRows },
+//       currentPage,
+//       limit
+//     );
+
+//     return res.json({
+//       success: true,
+//       ...response,
+//     });
+//   } catch (error) {
+//     console.error("FILTER PRODUCT ERROR:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+
+
+
+
+
+
 const { Op } = require("sequelize");
 
 const Product = require("../../models/products/product.model");
@@ -9,6 +261,7 @@ const VariantImage = require("../../models/productVariants/variantImage.model");
 const Category = require("../../models/category/category.model");
 const SubCategory = require("../../models/category/subcategory.model");
 const Wishlist = require("../../models/wishlist.model");
+
 const {
   getPaginationOptions,
   formatPagination,
@@ -28,56 +281,91 @@ exports.getFilteredProducts = async (req, res) => {
       inStock,
       specs,
     } = req.query;
+
     const userId = req.user?.id;
+
     const paginationOptions = getPaginationOptions(req.query);
     const { limit, offset, currentPage } = paginationOptions;
+
     const toArray = (val) => (val ? val.split(",").map((v) => v.trim()) : []);
 
-    /* ---------- product where ---------- */
-   const productWhere = {};
+    /* ---------- PRODUCT WHERE ---------- */
 
-if (req.query.isActive !== undefined) {
-  productWhere.isActive = req.query.isActive === "true";
-}
+    const productWhere = {};
 
-    /* ---------- CATEGORY + SUBCATEGORY + PRODUCTCATEGORY (FIXED LOGIC) ---------- */
-
-const categories = toArray(categoryId).map(Number);
-const subCategories = toArray(subCategoryId).map(Number);
-const productCategories = toArray(productCategoryId).map(Number);
-
-if (categories.length) {
-  const orConditions = [];
-
-  categories.forEach((catId) => {
-    const condition = { categoryId: catId };
-
-    // Apply subCategory & productCategory filters ONLY if they exist
-    if (subCategories.length) {
-      condition.subCategoryId = { [Op.in]: subCategories };
+    if (req.query.isActive !== undefined) {
+      productWhere.isActive = req.query.isActive === "true";
     }
 
-    if (productCategories.length) {
-      condition.productCategoryId = { [Op.in]: productCategories };
+    /* ---------- CATEGORY FILTER ---------- */
+
+    const categories = toArray(categoryId).map(Number);
+    const subCategories = toArray(subCategoryId).map(Number);
+    const productCategories = toArray(productCategoryId).map(Number);
+
+    if (categories.length) {
+      const orConditions = [];
+
+      categories.forEach((catId) => {
+        const condition = { categoryId: catId };
+
+        if (subCategories.length) {
+          condition.subCategoryId = { [Op.in]: subCategories };
+        }
+
+        if (productCategories.length) {
+          condition.productCategoryId = { [Op.in]: productCategories };
+        }
+
+        orConditions.push(condition);
+      });
+
+      productWhere[Op.or] = orConditions;
     }
 
-    orConditions.push(condition);
-  });
+    /* ---------- BRAND FILTER ---------- */
 
-  productWhere[Op.or] = orConditions;
-}
+    if (brands) {
+      productWhere.brandName = { [Op.in]: toArray(brands) };
+    }
 
-    if (brands) productWhere.brandName = { [Op.in]: toArray(brands) };
+    /* ---------- PRICE FILTER ---------- */
 
-    /* ---------- price ---------- */
     const priceWhere = {};
+
     if (minPrice || maxPrice) {
       priceWhere.sellingPrice = {};
+
       if (minPrice) priceWhere.sellingPrice[Op.gte] = Number(minPrice);
       if (maxPrice) priceWhere.sellingPrice[Op.lte] = Number(maxPrice);
     }
 
-    /* ---------- spec FILTER include (for WHERE) ---------- */
+    /* ---------- VARIANT FILTER ---------- */
+
+    const variantWhere = { isActive: true };
+
+    if (colors) {
+      variantWhere.colorName = {
+        [Op.in]: toArray(colors),
+      };
+    }
+
+    /* ---------- SIZE FILTER ---------- */
+
+    const sizeWhere = {};
+
+    if (sizes) {
+      sizeWhere.size = {
+        [Op.in]: toArray(sizes),
+      };
+    }
+
+    if (inStock === "true") {
+      sizeWhere.stock = { [Op.gt]: 0 };
+    }
+
+    /* ---------- SPEC FILTER ---------- */
+
     const specFilterIncludes = [];
 
     if (specs && typeof specs === "object") {
@@ -87,7 +375,7 @@ if (categories.length) {
         specFilterIncludes.push({
           model: ProductSpec,
           as: "specs",
-          attributes: [], //  used only for filtering
+          attributes: [],
           where: {
             specKey: key,
             specValue: {
@@ -99,9 +387,11 @@ if (categories.length) {
       });
     }
 
-    /* ---------- MAIN QUERY ---------- */
-    const products = await Product.findAll({
+    /* ---------- QUERY ---------- */
+
+    const { rows: products, count } = await Product.findAndCountAll({
       where: productWhere,
+
       attributes: [
         "id",
         "sku",
@@ -111,22 +401,20 @@ if (categories.length) {
         "isActive",
         "createdAt",
       ],
+
       include: [
-        /* CATEGORY */
         {
           model: Category,
           as: "Category",
           attributes: ["id", "name"],
         },
 
-        /* SUBCATEGORY */
         {
           model: SubCategory,
           as: "SubCategory",
           attributes: ["id", "name"],
         },
 
-        /* PRICE */
         {
           model: ProductPrice,
           as: "price",
@@ -134,7 +422,6 @@ if (categories.length) {
           required: Object.keys(priceWhere).length > 0,
         },
 
-        /* ALL SPECS (always returned) */
         {
           model: ProductSpec,
           as: "specs",
@@ -142,12 +429,12 @@ if (categories.length) {
           required: false,
         },
 
-        /* VARIANTS */
         {
           model: ProductVariant,
           as: "variants",
-          where: { isActive: true },
-          required: false,
+          where: variantWhere,
+          required: colors ? true : false,
+
           include: [
             {
               model: VariantImage,
@@ -155,48 +442,28 @@ if (categories.length) {
               attributes: ["id", "imageUrl"],
               required: false,
             },
+
             {
               model: VariantSize,
               as: "sizes",
-              required: false,
+              where: Object.keys(sizeWhere).length ? sizeWhere : undefined,
+              required: sizes || inStock === "true",
             },
           ],
         },
 
-        /* SPEC FILTERING JOIN */
         ...specFilterIncludes,
       ],
 
-      order: [["createdAt", "DESC"]],
       distinct: true,
+      limit,
+      offset,
+
+      order: [["createdAt", "DESC"]],
     });
 
-    /* ---------- POST FILTERS ---------- */
-    let filteredProducts = products;
+    /* ---------- WISHLIST ---------- */
 
-    if (colors) {
-      const colorArray = toArray(colors).map((c) => c.toLowerCase());
-      filteredProducts = filteredProducts.filter((p) =>
-        p.variants.some((v) =>
-          colorArray.includes((v.colorName || "").toLowerCase()),
-        ),
-      );
-    }
-
-    if (sizes) {
-      const sizeArray = toArray(sizes);
-      filteredProducts = filteredProducts.filter((p) =>
-        p.variants.some((v) => v.sizes.some((s) => sizeArray.includes(s.size))),
-      );
-    }
-
-    if (inStock === "true") {
-      filteredProducts = filteredProducts.filter((p) =>
-        p.variants.some(
-          (v) => v.totalStock > 0 && v.sizes.some((s) => s.stock > 0),
-        ),
-      );
-    }
     let wishlistedMap = {};
 
     if (userId) {
@@ -209,25 +476,25 @@ if (categories.length) {
         if (!wishlistedMap[w.productId]) {
           wishlistedMap[w.productId] = [];
         }
+
         wishlistedMap[w.productId].push(w.variantId);
       });
     }
 
-    const finalProducts = filteredProducts.map((p) => {
+    const finalProducts = products.map((p) => {
       const productWishlisted = !!wishlistedMap[p.id];
-            return {
-            ...p.toJSON(),
-            isWishlisted: productWishlisted,
-            wishlistedVariants: wishlistedMap[p.id] || [],
+
+      return {
+        ...p.toJSON(),
+        isWishlisted: productWishlisted,
+        wishlistedVariants: wishlistedMap[p.id] || [],
       };
     });
-     /* ---------- MANUAL PAGINATION ---------- */
-    const totalCount = finalProducts.length;
 
-    const paginatedRows = finalProducts.slice(offset, offset + limit);
+    /* ---------- PAGINATION ---------- */
 
     const response = formatPagination(
-      { count: totalCount, rows: paginatedRows },
+      { count, rows: finalProducts },
       currentPage,
       limit
     );
@@ -238,11 +505,10 @@ if (categories.length) {
     });
   } catch (error) {
     console.error("FILTER PRODUCT ERROR:", error);
+
     return res.status(500).json({
       success: false,
       message: error.message,
     });
   }
 };
-
-
