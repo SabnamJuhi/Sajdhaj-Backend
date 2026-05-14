@@ -32,8 +32,8 @@ exports.sendDeliveryAssignmentEmail = async ({
   phone,
   address,
   verificationLink,
-   codPaymentLink = null,   
-  isCOD = false, 
+  codPaymentLink = null,
+  isCOD = false,
 }) => {
   await transporter.sendMail({
     from: `"Admin" <${process.env.EMAIL_USER}>`,
@@ -75,7 +75,6 @@ exports.sendDeliveryAssignmentEmail = async ({
   });
 };
 
-
 // send mail to company
 exports.sendContactToCompany = async ({ name, email, phone, message }) => {
   return transporter.sendMail({
@@ -109,45 +108,152 @@ exports.sendAutoReplyToCustomer = async ({ name, email }) => {
 };
 
 
-/**
- * Send order email to company and customer
- */
-exports.sendInvoiceEmail = async ({ orderNumber, orderAddress, totalAmount }) => {
-  if (!orderAddress?.email) {
-    throw new Error("Customer email missing");
+
+
+
+
+exports.sendInvoiceEmail = async (
+  emails,
+  order,
+  items,
+  address,
+  invoicePath
+) => {
+  try {
+
+    const productList = items
+      .map(
+        (item) =>
+          `<li>${item.productName} (Qty: ${item.quantity}) - ₹${item.finalPrice}</li>`
+      )
+      .join("");
+
+    const info = await transporter.sendMail({
+      from: `"Sajdhaj Store" <${process.env.EMAIL_USER}>`,
+      to: emails,
+
+      subject: `✅ Order Confirmed - ${order.orderNumber}`,
+html: `
+<div style="font-family: Arial, sans-serif; background:#f6f6f6; padding:20px;">
+
+  <table align="center" width="600" style="background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 2px 6px rgba(0,0,0,0.1);">
+
+    <!-- Header -->
+    <tr>
+      <td style="background:#111; color:#fff; padding:20px; text-align:center;">
+        <h1 style="margin:0; font-size:22px;">Sajdhaj</h1>
+        <p style="margin:5px 0 0;">Order Confirmation</p>
+      </td>
+    </tr>
+
+    <!-- Greeting -->
+    <tr>
+      <td style="padding:20px;">
+        <p style="font-size:16px;">Hello <b>${address.fullName}</b>,</p>
+        <p>Your order <b>${order.orderNumber}</b> has been placed successfully 🎉</p>
+      </td>
+    </tr>
+
+    <!-- Order Summary -->
+    <tr>
+      <td style="padding:0 20px 20px 20px;">
+        <h3 style="border-bottom:1px solid #eee; padding-bottom:8px;">Order Summary</h3>
+
+        <table width="100%" style="border-collapse:collapse; font-size:14px;">
+          <thead>
+            <tr style="background:#f3f3f3;">
+              <th align="left" style="padding:8px; border-bottom:1px solid #ddd;">Product</th>
+              <th align="center" style="padding:8px; border-bottom:1px solid #ddd;">Qty</th>
+              <th align="right" style="padding:8px; border-bottom:1px solid #ddd;">Price</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${items
+              .map(
+                (item) => `
+                <tr>
+                  <td style="padding:8px; border-bottom:1px solid #eee;">
+                    ${item.productName}
+                  </td>
+                  <td align="center" style="padding:8px; border-bottom:1px solid #eee;">
+                    ${item.quantity}
+                  </td>
+                  <td align="right" style="padding:8px; border-bottom:1px solid #eee;">
+                    ₹${item.finalAmount}
+                  </td>
+                </tr>
+              `,
+              )
+              .join("")}
+          </tbody>
+        </table>
+
+      </td>
+    </tr>
+
+    <!-- Pricing -->
+    <tr>
+      <td style="padding:0 20px 20px 20px;">
+        <table width="100%" style="font-size:14px;">
+          <tr>
+            <td>Subtotal</td>
+            <td align="right">₹${order.subtotal}</td>
+          </tr>
+          <tr>
+            <td>Coupon Discount</td>
+            <td align="right"> - ₹${order.couponDiscount}</td>
+          </tr>
+          <tr>
+            <td>Shipping</td>
+            <td align="right"> + ₹${order.shippingFee}</td>
+          </tr>
+          <tr>
+            <td style="font-weight:bold; padding-top:10px;">Total</td>
+            <td align="right" style="font-weight:bold; padding-top:10px;">
+              ₹${order.totalAmount}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+
+    <!-- Shipping Address -->
+    <tr>
+      <td style="padding:0 20px 20px 20px;">
+        <h3 style="border-bottom:1px solid #eee; padding-bottom:8px;">Shipping Address</h3>
+        <p style="font-size:14px; line-height:1.6;">
+          ${address.fullName}<br/>
+          ${address.addressLine}<br/>
+          ${address.city}, ${address.state} - ${address.zipCode}<br/>
+          Phone: ${address.phoneNumber}
+        </p>
+      </td>
+    </tr>
+
+    <!-- Footer -->
+    <tr>
+      <td style="background:#f3f3f3; text-align:center; padding:15px; font-size:12px; color:#777;">
+        <p style="margin:0;">Your invoice is attached with this email.</p>
+        <p style="margin:5px 0 0;">© ${new Date().getFullYear()} Sajdhaj</p>
+      </td>
+    </tr>
+
+  </table>
+
+</div>
+`,
+
+      attachments: [
+        {
+          filename: `invoice-${order.orderNumber}.pdf`,
+          path: invoicePath,
+        },
+      ],
+    });
+
+    console.log("Email sent:", info.response);
+
+  } catch (error) {
+    console.error("Email error:", error);
   }
-
-  const companyEmail = process.env.EMAIL_USER; // company receives mail
-
-  // ---------- COMPANY EMAIL ----------
-  await transporter.sendMail({
-    from: `"ScrewKart Orders" <${process.env.EMAIL_USER}>`,
-    to: companyEmail,
-    subject: `🛒 New Order Received - ${orderNumber}`,
-    html: `
-      <h2>New Order Received</h2>
-      <p><b>Order Number:</b> ${orderNumber}</p>
-      <p><b>Customer Name:</b> ${orderAddress.fullName}</p>
-      <p><b>Email:</b> ${orderAddress.email}</p>
-      <p><b>Phone:</b> ${orderAddress.phoneNumber}</p>
-      <p><b>Address:</b> ${orderAddress.addressLine}, ${orderAddress.city}, ${orderAddress.state}</p>
-      <p><b>Total Amount:</b> ₹${totalAmount}</p>
-    `,
-  });
-
-  // ---------- CUSTOMER EMAIL ----------
-  await transporter.sendMail({
-    from: `"ScrewKart" <${process.env.EMAIL_USER}>`,
-    to: orderAddress.email, // ⚠️ THIS fixes "No recipients defined"
-    subject: `✅ Order Confirmed - ${orderNumber}`,
-    html: `
-      <h2>Thank you for your order!</h2>
-      <p>Hello ${orderAddress.fullName},</p>
-      <p>Your order <b>${orderNumber}</b> has been placed successfully.</p>
-      <p><b>Total Paid:</b> ₹${totalAmount}</p>
-      <p>We will deliver it soon 🚚</p>
-      <br/>
-      <p>Regards,<br/>ScrewKart Team</p>
-    `,
-  });
 };

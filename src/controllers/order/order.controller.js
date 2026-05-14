@@ -1,580 +1,4 @@
-// // const { generateInvoice } = require("../../utils/generateInvoice");
-// const { sendInvoiceEmail } = require("../../utils/email");
 
-// function generateOtp() {
-//   return Math.floor(1000 + Math.random() * 9000).toString(); // 4-digit OTP
-// }
-
-// exports.placeOrder = async (req, res) => {
-//   let t;
-
-//   try {
-//     t = await sequelize.transaction();
-
-//     const userId = req.user.id;
-//     const { addressId, paymentMethod, buyNow } = req.body;
-
-//     if (!addressId) throw new Error("Address is required");
-
-//     const userAddress = await UserAddress.findOne({
-//       where: { id: addressId, userId },
-//       transaction: t,
-//       lock: t.LOCK.UPDATE,
-//     });
-
-//     if (!userAddress) throw new Error("Invalid address");
-
-//     let orderSourceItems = [];
-
-//     // ================= BUY NOW =================
-//     if (buyNow) {
-//       const { productId, variantId, sizeId, quantity } = buyNow;
-
-//       const product = await Product.findByPk(productId, {
-//         include: [{ model: ProductPrice, as: "price" }],
-//         transaction: t,
-//         lock: t.LOCK.UPDATE,
-//       });
-
-//       const variant = await ProductVariant.findByPk(variantId, {
-//         transaction: t,
-//         lock: t.LOCK.UPDATE,
-//       });
-
-//       const variantSize = await VariantSize.findByPk(sizeId, {
-//         transaction: t,
-//         lock: t.LOCK.UPDATE,
-//       });
-
-//       if (!product || !variant || !variantSize)
-//         throw new Error("Invalid Buy Now product");
-
-//       orderSourceItems = [
-//         {
-//           product,
-//           variant,
-//           variantSize,
-//           quantity,
-//           productId,
-//           variantId,
-//           sizeId,
-//         },
-//       ];
-//     }
-
-//     // ================= CART =================
-//     else {
-//       orderSourceItems = await CartItem.findAll({
-//         where: { userId },
-//         include: [
-//           {
-//             model: Product,
-//             as: "product",
-//             include: [{ model: ProductPrice, as: "price" }],
-//           },
-//           { model: ProductVariant, as: "variant" },
-//           { model: VariantSize, as: "variantSize" },
-//         ],
-//         transaction: t,
-//         lock: t.LOCK.UPDATE,
-//       });
-
-//       if (!orderSourceItems.length) throw new Error("Cart is empty");
-//     }
-
-//     // ================= CALCULATE =================
-//     let subtotal = 0;
-//     let totalTax = 0;
-
-//     for (const item of orderSourceItems) {
-//       const price = Number(item.product?.price?.sellingPrice || 0);
-//       const qty = Number(item.quantity || 0);
-//       const stock = Number(item.variantSize?.stock || 0);
-//       const gstRate = Number(item.product?.gstRate || 0);
-
-//       if (!price || qty <= 0) throw new Error("Invalid order item");
-//       if (stock < qty)
-//         throw new Error(`Insufficient stock for ${item.product.title}`);
-
-//       const itemSubtotal = price * qty;
-//       const itemTax = Math.round((itemSubtotal * gstRate) / 100);
-
-//       subtotal += itemSubtotal;
-//       totalTax += itemTax;
-//     }
-
-//     const shippingFee = subtotal > 5000 ? 0 : 150;
-//     const totalAmount = subtotal + totalTax + shippingFee;
-
-//     const isCOD = paymentMethod === "COD";
-//     const otp = generateOtp();
-
-//     // ================= CREATE ORDER =================
-//     const order = await Order.create(
-//       {
-//         userId,
-//         orderNumber: generateOrderNumber(),
-//         subtotal,
-//         taxAmount: totalTax,
-//         shippingFee,
-//         totalAmount,
-//         status: isCOD ? "confirmed" : "pending",
-//         otp,
-//         paymentMethod,
-//         paymentStatus: "unpaid",
-//       },
-//       { transaction: t },
-//     );
-
-//     // ================= ORDER ITEMS =================
-//     const orderItems = orderSourceItems.map((item) => {
-//       const price = Number(item.product.price.sellingPrice);
-//       const qty = Number(item.quantity);
-//       const gstRate = Number(item.product.gstRate || 0);
-
-//       const itemSubtotal = price * qty;
-//       const itemTax = Math.round((itemSubtotal * gstRate) / 100);
-
-//       return {
-//         orderId: order.id,
-//         productId: item.productId,
-//         variantId: item.variantId,
-//         sizeId: item.sizeId,
-//         productName: item.product.title,
-//         variantColor: item.variant.colorName,
-//         sizeLabel: item.variantSize.size,
-//         quantity: qty,
-//         priceAtPurchase: price,
-//         taxRate: gstRate,
-//         taxAmount: itemTax,
-//         totalPrice: itemSubtotal + itemTax,
-//       };
-//     });
-
-//     await OrderItem.bulkCreate(orderItems, { transaction: t });
-
-//     // ================= ADDRESS SNAPSHOT =================
-//     let orderAddress = await OrderAddress.create(
-//       {
-//         orderId: order.id,
-//         fullName: userAddress.fullName,
-//         email: userAddress.email,
-//         phoneNumber: userAddress.phoneNumber,
-//         addressLine: userAddress.addressLine,
-//         country: userAddress.country,
-//         city: userAddress.city,
-//         state: userAddress.state,
-//         zipCode: userAddress.zipCode,
-//         latitude: userAddress.latitude,
-//         longitude: userAddress.longitude,
-//         placeId: userAddress.placeId,
-//         formattedAddress:
-//           userAddress.formattedAddress ||
-//           `${userAddress.addressLine}, ${userAddress.city}, ${userAddress.state} ${userAddress.zipCode}, ${userAddress.country}`,
-//       },
-//       { transaction: t },
-//     );
-
-//     // ================= STOCK DEDUCT (COD) =================
-//     if (isCOD) {
-//       for (const item of orderItems) {
-//         await VariantSize.decrement("stock", {
-//           by: item.quantity,
-//           where: { id: item.sizeId },
-//           transaction: t,
-//         });
-//         await ProductVariant.decrement("totalStock", {
-//           by: item.quantity,
-//           where: { id: item.variantId },
-//           transaction: t,
-//         });
-//       }
-
-//       if (!buyNow) {
-//         await CartItem.destroy({ where: { userId }, transaction: t });
-//       }
-//     }
-
-//     await t.commit();
-
-//     // ================= GENERATE + SEND INVOICE =================
-//     console.log("ORDER ADDRESS DEBUG:", orderAddress);
-
-// //     // 1️⃣ generate pdf
-// //     const filePath = await generateInvoice({
-// //       order,
-// //       items: orderItems,
-// //       address: orderAddress,
-// //     });
-// // // console.log("INVOICE PATH:", filePath);
-//     // await sendInvoiceEmail({
-//     //   to: orderAddress.email,
-//     //   orderNumber: order.orderNumber,
-//     //   filePath,
-//     // });
-//     // ✅ SEND EMAILS HERE (correct place)
-//     await sendInvoiceEmail({
-//       orderNumber: order.orderNumber,
-//       orderAddress, // must contain email
-//       totalAmount: order.totalAmount,
-//       // filePath,
-//     });
-
-//     // ================= COD RESPONSE =================
-//     if (isCOD) {
-//       return res.json({
-//         success: true,
-//         message: "Order placed with Cash on Delivery",
-//         orderNumber: order.orderNumber,
-//         totalAmount,
-//       });
-//     }
-
-//     // ================= RAZORPAY =================
-//     const razorpayOrder = await razorpay.orders.create({
-//       amount: totalAmount * 100,
-//       currency: "INR",
-//       receipt: order.orderNumber,
-//     });
-
-//     return res.json({
-//       success: true,
-//       orderNumber: order.orderNumber,
-//       razorpayOrderId: razorpayOrder.id,
-//       amount: razorpayOrder.amount,
-//       currency: "INR",
-//       key: process.env.RAZORPAY_KEY_ID,
-//     });
-//   } catch (err) {
-//     if (t && !t.finished) await t.rollback();
-
-//     return res.status(500).json({
-//       success: false,
-//       message: err.message,
-//     });
-//   }
-// };
-
-// exports.verifyRazorpayPayment = async (req, res) => {
-//   const t = await sequelize.transaction();
-
-//   try {
-//     const {
-//       razorpay_order_id,
-//       razorpay_payment_id,
-//       razorpay_signature,
-//       orderNumber,
-//     } = req.body;
-
-//     const body = razorpay_order_id + "|" + razorpay_payment_id;
-
-//     const expectedSignature = crypto
-//       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-//       .update(body.toString())
-//       .digest("hex");
-
-//     if (expectedSignature !== razorpay_signature) {
-//       throw new Error("Payment verification failed");
-//     }
-
-//     const order = await Order.findOne({
-//       where: { orderNumber },
-//       include: [OrderItem],
-//       transaction: t,
-//       lock: true,
-//     });
-
-//     if (!order) throw new Error("Order not found");
-
-//     if (order.paymentStatus === "paid") {
-//       await t.commit();
-//       return res.json({ success: true });
-//     }
-
-//     await order.update(
-//       {
-//         status: "confirmed",
-//         paymentStatus: "paid",
-//         transactionId: razorpay_payment_id,
-//         paidAt: new Date(),
-//       },
-//       { transaction: t },
-//     );
-
-//     //  deduct stock
-//     for (const item of order.OrderItems) {
-//       await VariantSize.decrement("stock", {
-//         by: item.quantity,
-//         where: { id: item.sizeId },
-//         transaction: t,
-//       });
-
-//       await ProductVariant.decrement("totalStock", {
-//         by: item.quantity,
-//         where: { id: item.variantId },
-//         transaction: t,
-//       });
-//     }
-
-//     await CartItem.destroy({
-//       where: { userId: order.userId },
-//       transaction: t,
-//     });
-
-//     await t.commit();
-
-//     return res.json({
-//       success: true,
-//       message: "Payment verified",
-//     });
-//   } catch (err) {
-//     await t.rollback();
-
-//     return res.status(400).json({
-//       success: false,
-//       message: err.message,
-//     });
-//   }
-// };
-
-// exports.razorpayWebhook = async (req, res) => {
-//   const event = JSON.parse(req.body.toString());
-
-//   try {
-//     switch (event.event) {
-//       case "refund.processed":
-//         await exports.handleRefundProcessed(event);
-//         break;
-
-//       case "payment.failed":
-//         await exports.handlePaymentFailed(event);
-//         break;
-
-//       case "payment.captured":
-//         await exports.handlePaymentCaptured(event);
-//         break;
-
-//       default:
-//         console.log("Unhandled Razorpay event:", event.event);
-//     }
-
-//     res.json({ received: true });
-//   } catch (err) {
-//     console.error("Webhook error:", err);
-//     res.status(500).json({ error: "Webhook processing failed" });
-//   }
-// };
-
-// /**
-//  * Handle Payment Captured Webhook
-//  */
-// exports.handlePaymentCaptured = async (event) => {
-//   const payment = event.payload.payment.entity;
-//   const orderNumber = payment.receipt;
-
-//   let t = await sequelize.transaction();
-
-//   try {
-//     const order = await Order.findOne({
-//       where: { orderNumber },
-//       include: [{ model: OrderItem }],
-//       transaction: t,
-//       lock: t.LOCK.UPDATE,
-//     });
-
-//     if (!order) {
-//       console.error(`Order not found for receipt: ${orderNumber}`);
-//       await t.rollback();
-//       return;
-//     }
-
-//     // Check if already processed
-//     if (order.paymentStatus === "paid") {
-//       console.log(`Order ${orderNumber} already marked as paid`);
-//       await t.rollback();
-//       return;
-//     }
-
-//     // Update order
-//     order.paymentStatus = "paid";
-//     order.status = "confirmed";
-//     order.transactionId = payment.id;
-//     order.paidAt = new Date();
-//     await order.save({ transaction: t });
-
-//     // Deduct stock
-//     for (const item of order.OrderItems) {
-//       await VariantSize.decrement("stock", {
-//         by: item.quantity,
-//         where: { id: item.sizeId },
-//         transaction: t,
-//       });
-
-//       await ProductVariant.decrement("totalStock", {
-//         by: item.quantity,
-//         where: { id: item.variantId },
-//         transaction: t,
-//       });
-//     }
-
-//     // Clear cart
-//     await CartItem.destroy({
-//       where: { userId: order.userId },
-//       transaction: t,
-//     });
-
-//     await t.commit();
-//     console.log(`Payment captured successfully for order: ${orderNumber}`);
-//   } catch (err) {
-//     await t.rollback();
-//     console.error("Error processing payment.captured:", err);
-//     throw err;
-//   }
-// };
-
-// /**
-//  * Handle Payment Failed Webhook
-//  */
-// exports.handlePaymentFailed = async (event) => {
-//   const payment = event.payload.payment.entity;
-//   const orderNumber = payment.receipt;
-
-//   try {
-//     const order = await Order.findOne({ where: { orderNumber } });
-
-//     if (order && order.paymentStatus !== "paid") {
-//       order.paymentStatus = "failed";
-//       order.status = "cancelled";
-//       order.failureReason = payment.error_description || "Payment failed";
-//       await order.save();
-
-//       console.log(`Payment failed for order: ${orderNumber}`);
-//     }
-//   } catch (err) {
-//     console.error("Error processing payment.failed:", err);
-//     throw err;
-//   }
-// };
-
-// /**
-//  * Handle Refund Processed Webhook
-//  */
-// exports.handleRefundProcessed = async (event) => {
-//   const refund = event.payload.refund.entity;
-//   const orderNumber = refund.notes?.orderNumber;
-
-//   if (!orderNumber) {
-//     console.error("Order number missing in refund notes");
-//     return;
-//   }
-
-//   const t = await sequelize.transaction();
-
-//   try {
-//     const order = await Order.findOne({
-//       where: { orderNumber },
-//       include: [{ model: OrderItem }],
-//       transaction: t,
-//       lock: t.LOCK.UPDATE,
-//     });
-
-//     if (!order) {
-//       console.error("Order not found for refund:", orderNumber);
-//       await t.rollback();
-//       return;
-//     }
-
-//     // -----------------------------
-//     // Update refund state
-//     // -----------------------------
-//     order.status = "refunded";
-//     order.paymentStatus = "refunded";
-//     order.refundId = refund.id;
-//     order.refundAmount = refund.amount / 100;
-//     order.refundedAt = new Date();
-
-//     await order.save({ transaction: t });
-
-//     // -----------------------------
-//     // Restore stock AFTER refund success
-//     // -----------------------------
-//     for (const item of order.OrderItems) {
-//       await VariantSize.increment("stock", {
-//         by: item.quantity,
-//         where: { id: item.sizeId },
-//         transaction: t,
-//       });
-
-//       await ProductVariant.increment("totalStock", {
-//         by: item.quantity,
-//         where: { id: item.variantId },
-//         transaction: t,
-//       });
-//     }
-
-//     await t.commit();
-
-//     console.log("Refund completed for order:", orderNumber);
-//   } catch (err) {
-//     await t.rollback();
-//     console.error("Refund webhook error:", err);
-//     throw err;
-//   }
-// };
-
-// /**
-//  * Test Razorpay Configuration
-//  */
-// exports.testRazorpayConfig = async (req, res) => {
-//   try {
-//     // Test crypto module
-//     const testCrypto = () => {
-//       const testHmac = crypto
-//         .createHmac("sha256", "test")
-//         .update("test")
-//         .digest("hex");
-//       return !!testHmac;
-//     };
-
-//     // Test Razorpay instance
-//     const testRazorpay = async () => {
-//       try {
-//         await razorpay.orders.create({
-//           amount: 100,
-//           currency: "INR",
-//           receipt: "test_receipt",
-//         });
-//         return true;
-//       } catch (error) {
-//         console.error("Razorpay test failed:", error.message);
-//         return false;
-//       }
-//     };
-
-//     const [cryptoWorks, razorpayWorks] = await Promise.all([
-//       testCrypto(),
-//       testRazorpay(),
-//     ]);
-
-//     res.status(200).json({
-//       success: true,
-//       data: {
-//         crypto: cryptoWorks ? "working" : "failed",
-//         razorpay: razorpayWorks ? "working" : "failed",
-//         config: {
-//           keyIdPresent: !!process.env.RAZORPAY_KEY_ID,
-//           keySecretPresent: !!process.env.RAZORPAY_KEY_SECRET,
-//           webhookSecretPresent: !!process.env.RAZORPAY_WEBHOOK_SECRET,
-//         },
-//       },
-//     });
-//   } catch (error) {
-//     res.status(500).json({
-//       success: false,
-//       message: error.message,
-//     });
-//   }
-// };
 
 const { Op } = require("sequelize");
 const {
@@ -591,6 +15,7 @@ const {
   OfferApplicableProduct,
   sequelize,
   Coupon,
+  User,
 } = require("../../models");
 const UserAddress = require("../../models/orders/userAddress.model");
 const { calculateCartDiscount } = require("../../services/discount.service");
@@ -602,193 +27,10 @@ const {
 } = require("../../utils/iciciCrypto");
 const CartCoupon = require("../../models/offers/cartCoupon.model");
 const ShippingSetting = require("../../models/shippingFee/shipping.model");
+const { generateInvoice } = require("../../utils/generateInvoice");
+const { sendInvoiceEmail } = require("../../utils/email");
 
-/**
- * STEP 1 — Place Order & Generate ICICI Payment Payload
- */
-// exports.placeOrder = async (req, res) => {
-//   let t;
 
-//   try {
-//     t = await sequelize.transaction();
-
-//     const userId = req.user.id;
-//     const { addressId, paymentMethod, couponCode } = req.body;
-
-//     if (!addressId) {
-//       throw new Error("Address is required to place order");
-//     }
-
-//     const userAddress = await UserAddress.findOne({
-//       where: { id: addressId, userId },
-//       transaction: t,
-//       lock: t.LOCK.UPDATE,
-//     });
-
-//     if (!userAddress) {
-//       throw new Error("Invalid address selected");
-//     }
-
-//     const cartItems = await CartItem.findAll({
-//       where: { userId },
-//       include: [
-//         {
-//           model: Product,
-//           as: "product",
-//           include: [{ model: ProductPrice, as: "price" }],
-//         },
-//         { model: ProductVariant, as: "variant" },
-//         { model: VariantSize, as: "variantSize" },
-//       ],
-//       transaction: t,
-//       lock: t.LOCK.UPDATE,
-//     });
-
-//     if (!cartItems.length) throw new Error("Cart is empty");
-
-//     // ✅ Calculate discount
-//     const discountResult = await calculateCartDiscount(cartItems, couponCode);
-
-//     const {
-//       totalOriginalAmount,
-//       productOfferDiscount,
-//       couponDiscount,
-//       finalPayableAmount,
-//     } = discountResult;
-
-//     const taxAmount = Math.round(finalPayableAmount * 0.12);
-//     const shippingFee = finalPayableAmount > 5000 ? 0 : 150;
-
-//     const grandTotal = finalPayableAmount + taxAmount + shippingFee;
-
-//     const isCOD = paymentMethod === "COD"; // ✅ FIXED
-
-//     // ✅ Create Order
-//     const order = await Order.create(
-//       {
-//         userId,
-//         orderNumber: generateOrderNumber(),
-
-//         totalOriginalAmount,
-//         productOfferDiscount,
-//         couponDiscount,
-
-//         subtotal: finalPayableAmount,
-//         taxAmount,
-//         shippingFee,
-
-//         totalAmount: grandTotal,
-//         finalPayableAmount: grandTotal,
-
-//         appliedCouponCode: couponCode || null,
-
-//         status: isCOD ? "confirmed" : "pending",
-//         paymentMethod,
-//         paymentStatus: "unpaid",
-//       },
-//       { transaction: t },
-//     );
-
-//     // ✅ Create Order Items
-//     const orderItems = cartItems.map((item) => ({
-//       orderId: order.id,
-//       productId: item.productId,
-//       variantId: item.variantId,
-//       sizeId: item.sizeId,
-
-//       productName: item.product.title,
-//       variantColor: item.variant.colorName,
-//       sizeLabel: item.variantSize.size,
-
-//       quantity: item.quantity,
-//       priceAtPurchase: item.product.price.sellingPrice,
-//       totalPrice: item.product.price.sellingPrice * item.quantity,
-//     }));
-
-//     await OrderItem.bulkCreate(orderItems, { transaction: t });
-
-//     await OrderAddress.create(
-//       {
-//         orderId: order.id,
-//         fullName: userAddress.fullName,
-//         email: userAddress.email,
-//         phoneNumber: userAddress.phoneNumber,
-//         addressLine: userAddress.addressLine,
-//         country: userAddress.country,
-//         city: userAddress.city,
-//         state: userAddress.state,
-//         zipCode: userAddress.zipCode,
-//       },
-//       { transaction: t },
-//     );
-//     if (isCOD) {
-//       for (const item of orderItems) {
-//         await VariantSize.decrement("stock", {
-//           by: item.quantity,
-//           where: { id: item.sizeId },
-//           transaction: t,
-//         });
-
-//         await ProductVariant.decrement("totalStock", {
-//           by: item.quantity,
-//           where: { id: item.variantId },
-//           transaction: t,
-//         });
-//       }
-
-//       // Clear Cart
-//       await CartItem.destroy({
-//         where: { userId },
-//         transaction: t,
-//       });
-//     }
-
-//     await t.commit();
-
-//     // ================= COD FLOW =================
-//     if (isCOD) {
-//       return res.status(200).json({
-//         success: true,
-//         message: "Order placed successfully with Cash on Delivery",
-//         orderNumber: order.orderNumber,
-//         totalAmount: grandTotal, // ✅ FIXED
-//         paymentMethod: "COD",
-//         paymentStatus: "unpaid",
-//         status: "confirmed",
-//       });
-//     }
-
-//     // ================= ICICI PAYMENT INIT =================
-//     const paymentData = {
-//       merchantId: process.env.ICICI_MERCHANT_ID,
-//       orderNumber: order.orderNumber,
-//       amount: grandTotal, // ✅ FIXED
-//       currency: "INR",
-//       returnUrl: process.env.ICICI_RETURN_URL,
-//       cancelUrl: process.env.ICICI_CANCEL_URL,
-//     };
-
-//     const payload = JSON.stringify(paymentData);
-//     const encData = encrypt(payload, process.env.ICICI_ENCRYPTION_KEY);
-//     const checksum = generateChecksum(encData, process.env.ICICI_CHECKSUM_KEY);
-
-//     return res.status(200).json({
-//       success: true,
-//       orderNumber: order.orderNumber,
-//       totalAmount: grandTotal,
-//       paymentUrl: process.env.ICICI_PAYMENT_URL,
-//       encData,
-//       checksum,
-//     });
-//   } catch (error) {
-//     if (t && !t.finished) await t.rollback();
-
-//     return res.status(500).json({
-//       success: false,
-//       message: error.message,
-//     });
-//   }
-// };
 
 // exports.placeOrder = async (req, res) => {
 //   const t = await sequelize.transaction();
@@ -802,12 +44,34 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 //     if (!addressId) {
 //       throw new Error("Address is required");
 //     }
-//     if(!userId){
+//     if (!userId) {
 //       throw new Error("user not exist");
 //     }
 //     if (!paymentMethod) {
 //       throw new Error("Payment method is required");
 //     }
+
+//     const user = await User.findByPk(userId, {
+//       attributes: ["id", "email"],
+//       transaction: t,
+//     });
+//     if (!user) {
+//       throw new Error("User not found");
+//     }
+
+//     // 0️⃣ Fetch Shipping Settings (STATIC FEE FROM ADMIN)
+//     let shippingSettings = await ShippingSetting.findOne({
+//       transaction: t,
+//     });
+//     if (!shippingSettings) {
+//       shippingSettings = await ShippingSetting.create(
+//         {
+//           shippingFee: 50,
+//         },
+//         { transaction: t },
+//       );
+//     }
+//     const STATIC_SHIPPING_FEE = Number(shippingSettings.shippingFee);
 
 //     // 1️⃣ Fetch User Address
 //     const userAddress = await UserAddress.findOne({
@@ -827,10 +91,10 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 //         {
 //           model: Product,
 //           as: "product",
-//           include: [{ model: ProductPrice, as: "price" }]
+//           include: [{ model: ProductPrice, as: "price" }],
 //         },
 //         { model: ProductVariant, as: "variant" },
-//         { model: VariantSize, as: "variantSize" }
+//         { model: VariantSize, as: "variantSize" },
 //       ],
 //       transaction: t,
 //       lock: t.LOCK.UPDATE,
@@ -844,7 +108,9 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 //     for (const item of cartItems) {
 //       const currentStock = item.variantSize?.stock || 0;
 //       if (currentStock < item.quantity) {
-//         throw new Error(`Insufficient stock for ${item.product?.title || 'product'}. Available: ${currentStock}`);
+//         throw new Error(
+//           `Insufficient stock for ${item.product?.title || "product"}. Available: ${currentStock}`,
+//         );
 //       }
 //     }
 
@@ -853,28 +119,32 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 //       where: {
 //         isActive: true,
 //         startDate: { [Op.lte]: now },
-//         endDate: { [Op.gte]: now }
+//         endDate: { [Op.gte]: now },
 //       },
 //       include: [
 //         { model: OfferSub, as: "subOffers" },
-//         { model: OfferApplicableProduct, as: "offerApplicableProducts" }
+//         { model: OfferApplicableProduct, as: "offerApplicableProducts" },
 //       ],
 //       transaction: t,
 //     });
 
-//     // 5️⃣ Process Cart Items with Offers
+//     // 5️⃣ Process Cart Items with Offers (MODIFIED)
 //     let totalOriginalAmount = 0;
 //     let productOfferDiscount = 0;
 //     let subTotal = 0;
 //     let totalQuantity = 0;
 
-//     // 🔥 NEW: Track eligible amount for coupon
+//     // Track eligible amount for coupon
 //     let eligibleForCouponTotal = 0;
 
 //     const processedItems = [];
 
 //     for (let item of cartItems) {
+//       const mrp = Number(item.product?.price?.mrp || 0);
 //       const sellingPrice = Number(item.product?.price?.sellingPrice || 0);
+//       const discountPercentage = Number(
+//         item.product?.price?.discountPercentage || 0,
+//       );
 //       const gstRate = Number(item.product?.gstRate || 0);
 //       const quantity = item.quantity;
 //       const currentStock = item.variantSize?.stock || 0;
@@ -884,16 +154,23 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 
 //       totalQuantity += validQuantity;
 
-//       const originalAmount = sellingPrice * validQuantity;
-//       totalOriginalAmount += originalAmount;
+//       // Calculate with quantity
+//       const totalMrp = mrp * validQuantity;
+//       const totalSellingPrice = sellingPrice * validQuantity;
 
-//       let itemDiscount = 0;
+//       totalOriginalAmount += totalSellingPrice;
+
+//       let itemOfferDiscount = 0;
 //       let offerApplied = false;
+//       let appliedOfferId = null;
+//       let appliedSubOfferId = null;
+//       let offerDiscountType = null;
+//       let offerDiscountValue = null;
 
 //       // Offer Check
 //       for (let offer of activeOffers) {
 //         const isProductEligible = offer.offerApplicableProducts.some(
-//           p => p.productId === item.productId
+//           (p) => p.productId === item.productId,
 //         );
 
 //         if (!isProductEligible) continue;
@@ -901,48 +178,76 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 //         const subOffer = offer.subOffers[0];
 //         if (!subOffer) continue;
 
-//         if (originalAmount < subOffer.minOrderValue) continue;
+//         if (totalSellingPrice < subOffer.minOrderValue) continue;
 
 //         if (subOffer.discountType === "PERCENTAGE") {
-//           let discount = (originalAmount * subOffer.discountValue) / 100;
+//           let discount = (totalSellingPrice * subOffer.discountValue) / 100;
 //           if (subOffer.maxDiscount) {
 //             discount = Math.min(discount, subOffer.maxDiscount);
 //           }
-//           itemDiscount = discount;
+//           itemOfferDiscount = discount;
+//           offerDiscountType = "PERCENTAGE";
+//           offerDiscountValue = subOffer.discountValue;
 //         } else if (subOffer.discountType === "FLAT") {
-//           itemDiscount = subOffer.discountValue;
+//           itemOfferDiscount = subOffer.discountValue;
+//           offerDiscountType = "FLAT";
+//           offerDiscountValue = subOffer.discountValue;
 //         }
 
 //         offerApplied = true;
+//         appliedOfferId = offer.id;
+//         appliedSubOfferId = subOffer.id;
 //         break;
 //       }
 
-//       const finalAmount = originalAmount - itemDiscount;
+//       const finalAmount = totalSellingPrice - itemOfferDiscount;
 
 //       if (isAvailable) {
 //         subTotal += finalAmount;
-//         productOfferDiscount += itemDiscount;
+//         productOfferDiscount += itemOfferDiscount;
 
-//         // 🔥 Track eligible amount for coupon
+//         // Track eligible amount for coupon (only items without offer)
 //         if (!offerApplied) {
-//           eligibleForCouponTotal += originalAmount;
+//           eligibleForCouponTotal += totalSellingPrice;
 //         }
 //       }
 
 //       processedItems.push({
+//         // Basic Info
 //         productId: item.productId,
 //         variantId: item.variantId,
 //         sizeId: item.sizeId,
-//         quantity: validQuantity,
-//         sellingPrice,
-//         originalAmount,
-//         itemDiscount,
-//         finalAmount,
-//         gstRate,
-//         offerApplied,
 //         productName: item.product?.title || "Unknown Product",
-//         variantColor: item.variant?.colorName,
-//         sizeLabel: item.variantSize?.size,
+//         variantInfo: {
+//           colorName: item.variant?.colorName,
+//           colorCode: item.variant?.colorCode,
+//           swatch: item.variant?.swatch,
+//           size: item.variantSize?.size,
+//         },
+
+//         // Base Pricing
+//         mrp,
+//         sellingPrice,
+//         discountPercentage,
+//         quantity: validQuantity,
+
+//         // Totals with Quantity
+//         totalMrp,
+//         totalSellingPrice,
+
+//         // Offer Details
+//         offerId: appliedOfferId,
+//         subOfferId: appliedSubOfferId,
+//         offerDiscountType,
+//         offerDiscountValue,
+//         offerDiscountAmount: itemOfferDiscount,
+//         offerApplied,
+
+//         // After Offer
+//         finalAmount,
+
+//         // GST
+//         gstRate,
 //       });
 //     }
 
@@ -956,7 +261,7 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 //           code: couponCode,
 //           isActive: true,
 //           startDate: { [Op.lte]: now },
-//           endDate: { [Op.gte]: now }
+//           endDate: { [Op.gte]: now },
 //         },
 //         transaction: t,
 //       });
@@ -964,12 +269,13 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 //       if (coupon) {
 //         const minCartValue = Number(coupon.minCartValue || 0);
 
-//         // 🔥 Check min cart value on eligible items only
 //         if (eligibleForCouponTotal >= minCartValue) {
 //           appliedCouponCode = coupon.code;
 
 //           if (coupon.discountType === "PERCENTAGE") {
-//             let discount = (eligibleForCouponTotal * Number(coupon.discountValue || 0)) / 100;
+//             let discount =
+//               (eligibleForCouponTotal * Number(coupon.discountValue || 0)) /
+//               100;
 //             if (coupon.maxDiscount) {
 //               discount = Math.min(discount, Number(coupon.maxDiscount));
 //             }
@@ -982,39 +288,63 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 //       }
 //     }
 
-//     const finalSubTotal = subTotal - couponDiscount;
-
-//     // 7️⃣ Calculate GST (based on correct coupon allocation)
+//     // 7️⃣ Apply Coupon and Calculate Final Values
 //     let taxAmount = 0;
+//     const finalProcessedItems = [];
 
 //     for (let item of processedItems) {
-//       let itemAfterCoupon = item.finalAmount;
+//       let itemCouponDiscount = 0;
 
-//       // 🔥 Only apply coupon to eligible items proportionally
-//       if (appliedCouponCode && !item.offerApplied && eligibleForCouponTotal > 0) {
-//         const proportion = item.originalAmount / eligibleForCouponTotal;
-//         itemAfterCoupon = item.finalAmount - (couponDiscount * proportion);
+//       // Apply coupon only to eligible items proportionally
+//       if (
+//         appliedCouponCode &&
+//         !item.offerApplied &&
+//         eligibleForCouponTotal > 0
+//       ) {
+//         const proportion = item.totalSellingPrice / eligibleForCouponTotal;
+//         itemCouponDiscount = couponDiscount * proportion;
 //       }
 
-//       const itemTax = Math.round((itemAfterCoupon * item.gstRate) / 100);
-//       taxAmount += itemTax;
+//       // Calculate subtotal (price after offer and coupon)
+//       const subtotal = item.finalAmount - itemCouponDiscount;
+
+//       // Calculate total discount
+//       const totalDiscount = item.offerDiscountAmount + itemCouponDiscount;
+
+//       // Calculate GST
+//       const gstAmount = Math.round((subtotal * item.gstRate) / 100);
+//       taxAmount += gstAmount;
+
+//       // Final price with GST
+//       const finalPrice = subtotal + gstAmount;
+
+//       finalProcessedItems.push({
+//         ...item,
+//         couponDiscountAmount: itemCouponDiscount,
+//         subtotal,
+//         totalDiscount,
+//         gstAmount,
+//         finalPrice,
+//       });
 //     }
 
-//     // 8️⃣ Calculate Shipping Fee
-//     const shippingFee = finalSubTotal > 5000 || finalSubTotal === 0 ? 0 : 150;
+//     const finalSubTotal = subTotal - couponDiscount;
+
+//     // 8️⃣ Calculate Shipping Fee - NOW USING STATIC FEE FROM ADMIN
+//     const shippingFee = STATIC_SHIPPING_FEE;
 //     const grandTotal = finalSubTotal + taxAmount + shippingFee;
 
-//    const orderNumber = generateOrderNumber();
+//     const orderNumber = generateOrderNumber();
 //     // Generate 6-digit OTP
 //     const otp = Math.floor(1000 + Math.random() * 9000).toString();
 //     console.log(`OTP generated for order ${orderNumber}: ${otp}`);
 
-//     // 🔟 Create Order
+//     // 🔟 Create Order (COMPLETELY UNCHANGED - YOUR EXISTING CODE)
 //     const order = await Order.create(
 //       {
 //         orderNumber,
 //         userId,
-//         otp: otp, // Always generate OTP for every order
+//         otp: otp,
 //         otpVerified: false,
 
 //         // Discount Breakup
@@ -1038,26 +368,52 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 //         // Timestamps
 //         confirmedAt: paymentMethod === "COD" ? new Date() : null,
 //       },
-//       { transaction: t }
+//       { transaction: t },
 //     );
 
-//     // 1️⃣1️⃣ Create Order Items
-//     const orderItems = processedItems.map((item) => ({
+//     // 1️⃣1️⃣ Create Order Items (MODIFIED - USING NEW MODEL FIELDS)
+//     const orderItems = finalProcessedItems.map((item) => ({
 //       orderId: order.id,
 //       productId: item.productId,
 //       variantId: item.variantId,
 //       sizeId: item.sizeId,
 
+//       // Product Details
 //       productName: item.productName,
-//       variantColor: item.variantColor,
-//       sizeLabel: item.sizeLabel,
+//       variantInfo: item.variantInfo,
 
+//       // Base Pricing
+//       mrp: item.mrp,
+//       sellingPrice: item.sellingPrice,
+//       discountPercentage: item.discountPercentage,
 //       quantity: item.quantity,
-//       priceAtPurchase: item.sellingPrice,
-//       totalPrice: item.originalAmount,
-//       discountAtPurchase: item.itemDiscount,
-//       finalPrice: item.finalAmount,
+
+//       // Totals with Quantity
+//       totalMrp: item.totalMrp,
+//       totalSellingPrice: item.totalSellingPrice,
+
+//       // Offer Details
+//       offerId: item.offerId,
+//       subOfferId: item.subOfferId,
+//       offerDiscountType: item.offerDiscountType,
+//       offerDiscountValue: item.offerDiscountValue,
+//       offerDiscountAmount: item.offerDiscountAmount,
+//       finalAmount: item.finalAmount,
+
+//       // Coupon Details
+//       couponDiscountAmount: item.couponDiscountAmount,
+
+//       // Final Calculations
+//       subtotal: item.subtotal,
+//       totalDiscount: item.totalDiscount,
+
+//       // GST
 //       gstRate: item.gstRate,
+//       gstAmount: item.gstAmount,
+//       finalPrice: item.finalPrice,
+
+//       // Offer Applied Flag
+//       offerApplied: item.offerApplied,
 //     }));
 
 //     await OrderItem.bulkCreate(orderItems, { transaction: t });
@@ -1077,9 +433,17 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 //         landmark: userAddress.landmark,
 //         addressType: userAddress.addressType,
 //       },
-//       { transaction: t }
+//       { transaction: t },
 //     );
-
+//     for (const item of processedItems) {
+//       await Product.increment(
+//         { soldCount: item.quantity },
+//         {
+//           where: { id: item.productId },
+//           transaction: t,
+//         },
+//       );
+//     }
 //     // 1️⃣3️⃣ Handle based on Payment Method
 //     if (paymentMethod === "COD") {
 //       // Deduct stock
@@ -1101,7 +465,37 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 //       await CartItem.destroy({ where: { userId }, transaction: t });
 //       await CartCoupon.destroy({ where: { userId }, transaction: t });
 
+//       // Commit transaction first
 //       await t.commit();
+
+//       // ✅ Generate Invoice
+//       const invoicePath = await generateInvoice(
+//         order,
+//         finalProcessedItems,
+//         userAddress,
+//       );
+//       console.log("Invoice generated at:", invoicePath);
+
+//       console.log("Sending email to:", userAddress.email);
+
+//       // Send invoice to account email + address email
+//       const recipientEmails = [user.email];
+
+//       if (userAddress.email && userAddress.email !== user.email) {
+//         recipientEmails.push(userAddress.email);
+//       }
+
+//       console.log("Sending email to:", recipientEmails);
+
+//       // await sendInvoiceEmail(recipientEmails, order.orderNumber, invoicePath);
+//       await sendInvoiceEmail(
+//   recipientEmails,
+//   order,
+//   finalProcessedItems,
+//   userAddress,
+//   invoicePath
+// );
+//       console.log("Email sent successfully");
 
 //       return res.status(200).json({
 //         success: true,
@@ -1115,8 +509,7 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 //           status: "confirmed",
 //         },
 //       });
-//     }
-//     else if (paymentMethod === "ICICI") {
+//     } else if (paymentMethod === "ICICI") {
 //       await t.commit();
 
 //       const paymentData = {
@@ -1133,7 +526,10 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 
 //       const payload = JSON.stringify(paymentData);
 //       const encData = encrypt(payload, process.env.ICICI_ENCRYPTION_KEY);
-//       const checksum = generateChecksum(encData, process.env.ICICI_CHECKSUM_KEY);
+//       const checksum = generateChecksum(
+//         encData,
+//         process.env.ICICI_CHECKSUM_KEY,
+//       );
 
 //       return res.status(200).json({
 //         success: true,
@@ -1153,9 +549,26 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 //           },
 //         },
 //       });
-//     }
-//     else {
+//     } else {
 //       await t.commit();
+
+//       // ✅ Generate Invoice
+//       const invoicePath = await generateInvoice(
+//         order,
+//         finalProcessedItems,
+//         userAddress,
+//       );
+//       // Send invoice to account email + address email
+//       const recipientEmails = [user.email];
+
+//       if (userAddress.email && userAddress.email !== user.email) {
+//         recipientEmails.push(userAddress.email);
+//       }
+
+//       console.log("Sending email to:", recipientEmails);
+
+//       await sendInvoiceEmail(recipientEmails, order.orderNumber, invoicePath);
+//       console.log("Email sent successfully");
 
 //       return res.status(200).json({
 //         success: true,
@@ -1170,7 +583,6 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 //         },
 //       });
 //     }
-
 //   } catch (error) {
 //     if (t && !t.finished) {
 //       await t.rollback();
@@ -1185,6 +597,7 @@ const ShippingSetting = require("../../models/shippingFee/shipping.model");
 //   }
 // };
 
+
 exports.placeOrder = async (req, res) => {
   const t = await sequelize.transaction();
 
@@ -1193,34 +606,57 @@ exports.placeOrder = async (req, res) => {
     const { addressId, paymentMethod, couponCode } = req.body;
     const now = new Date();
 
-    // Validation
+    // ================= VALIDATION =================
+
     if (!addressId) {
       throw new Error("Address is required");
     }
+
     if (!userId) {
-      throw new Error("user not exist");
+      throw new Error("User not found");
     }
+
     if (!paymentMethod) {
       throw new Error("Payment method is required");
     }
 
-    // 0️⃣ Fetch Shipping Settings (STATIC FEE FROM ADMIN)
+    // ================= USER =================
+
+    const user = await User.findByPk(userId, {
+      attributes: ["id", "email"],
+      transaction: t,
+    });
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // ================= SHIPPING =================
+
     let shippingSettings = await ShippingSetting.findOne({
       transaction: t,
     });
+
     if (!shippingSettings) {
       shippingSettings = await ShippingSetting.create(
         {
           shippingFee: 50,
         },
-        { transaction: t },
+        { transaction: t }
       );
     }
-    const STATIC_SHIPPING_FEE = Number(shippingSettings.shippingFee);
 
-    // 1️⃣ Fetch User Address
+    const STATIC_SHIPPING_FEE = Number(
+      shippingSettings.shippingFee || 0
+    );
+
+    // ================= ADDRESS =================
+
     const userAddress = await UserAddress.findOne({
-      where: { id: addressId, userId },
+      where: {
+        id: addressId,
+        userId,
+      },
       transaction: t,
       lock: t.LOCK.UPDATE,
     });
@@ -1229,18 +665,67 @@ exports.placeOrder = async (req, res) => {
       throw new Error("Invalid address selected");
     }
 
-    // 2️⃣ Fetch Cart Items
+    // ================= CART ITEMS =================
+
     const cartItems = await CartItem.findAll({
       where: { userId },
+
       include: [
         {
           model: Product,
           as: "product",
-          include: [{ model: ProductPrice, as: "price" }],
+
+          include: [
+            {
+              model: ProductPrice,
+              as: "price",
+            },
+
+            // ✅ PRODUCT OFFERS
+            {
+              model: OfferApplicableProduct,
+              as: "offerApplicableProducts",
+
+              include: [
+                {
+                  model: Offer,
+                  as: "offerDetails",
+
+                  where: {
+                    isActive: true,
+                    startDate: {
+                      [Op.lte]: now,
+                    },
+                    endDate: {
+                      [Op.gte]: now,
+                    },
+                  },
+
+                  required: false,
+
+                  include: [
+                    {
+                      model: OfferSub,
+                      as: "subOffers",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
         },
-        { model: ProductVariant, as: "variant" },
-        { model: VariantSize, as: "variantSize" },
+
+        {
+          model: ProductVariant,
+          as: "variant",
+        },
+
+        {
+          model: VariantSize,
+          as: "variantSize",
+        },
       ],
+
       transaction: t,
       lock: t.LOCK.UPDATE,
     });
@@ -1249,120 +734,208 @@ exports.placeOrder = async (req, res) => {
       throw new Error("Cart is empty");
     }
 
-    // 3️⃣ Check stock availability
+    // ================= STOCK CHECK =================
+
     for (const item of cartItems) {
-      const currentStock = item.variantSize?.stock || 0;
+      const currentStock = Number(
+        item.variantSize?.stock || 0
+      );
+
       if (currentStock < item.quantity) {
         throw new Error(
-          `Insufficient stock for ${item.product?.title || "product"}. Available: ${currentStock}`,
+          `Insufficient stock for ${
+            item.product?.title || "product"
+          }. Available: ${currentStock}`
         );
       }
     }
 
-    // 4️⃣ Fetch Active Offers
-    const activeOffers = await Offer.findAll({
-      where: {
-        isActive: true,
-        startDate: { [Op.lte]: now },
-        endDate: { [Op.gte]: now },
-      },
-      include: [
-        { model: OfferSub, as: "subOffers" },
-        { model: OfferApplicableProduct, as: "offerApplicableProducts" },
-      ],
-      transaction: t,
-    });
+    // ================= TOTALS =================
 
-    // 5️⃣ Process Cart Items with Offers (MODIFIED)
     let totalOriginalAmount = 0;
     let productOfferDiscount = 0;
     let subTotal = 0;
     let totalQuantity = 0;
 
-    // Track eligible amount for coupon
     let eligibleForCouponTotal = 0;
 
     const processedItems = [];
 
-    for (let item of cartItems) {
-      const mrp = Number(item.product?.price?.mrp || 0);
-      const sellingPrice = Number(item.product?.price?.sellingPrice || 0);
-      const discountPercentage = Number(
-        item.product?.price?.discountPercentage || 0,
+    // ================= PROCESS ITEMS =================
+
+    for (const item of cartItems) {
+      const mrp = Number(
+        item.product?.price?.mrp || 0
       );
-      const gstRate = Number(item.product?.gstRate || 0);
-      const quantity = item.quantity;
-      const currentStock = item.variantSize?.stock || 0;
+
+      const sellingPrice = Number(
+        item.product?.price?.sellingPrice || 0
+      );
+
+      const discountPercentage = Number(
+        item.product?.price?.discountPercentage || 0
+      );
+
+      const gstRate = Number(
+        item.product?.gstRate || 0
+      );
+
+      const quantity = Number(item.quantity || 0);
+
+      const currentStock = Number(
+        item.variantSize?.stock || 0
+      );
 
       const isAvailable = currentStock > 0;
-      const validQuantity = isAvailable ? Math.min(quantity, currentStock) : 0;
+
+      const validQuantity = isAvailable
+        ? Math.min(quantity, currentStock)
+        : 0;
 
       totalQuantity += validQuantity;
 
-      // Calculate with quantity
+      // ================= PRICE TOTALS =================
+
       const totalMrp = mrp * validQuantity;
-      const totalSellingPrice = sellingPrice * validQuantity;
+
+      const totalSellingPrice =
+        sellingPrice * validQuantity;
 
       totalOriginalAmount += totalSellingPrice;
 
+      // ================= OFFER VARIABLES =================
+
       let itemOfferDiscount = 0;
+
       let offerApplied = false;
+
       let appliedOfferId = null;
       let appliedSubOfferId = null;
+
       let offerDiscountType = null;
       let offerDiscountValue = null;
 
-      // Offer Check
-      for (let offer of activeOffers) {
-        const isProductEligible = offer.offerApplicableProducts.some(
-          (p) => p.productId === item.productId,
-        );
+      let offerCode = null;
+      let offerTitle = null;
 
-        if (!isProductEligible) continue;
+      // =====================================================
+      // ✅ FIXED OFFER LOGIC
+      // =====================================================
 
-        const subOffer = offer.subOffers[0];
+      const applicableOffers =
+        item.product?.offerApplicableProducts || [];
+
+      for (const applicable of applicableOffers) {
+        const offer = applicable.offerDetails;
+
+        if (!offer) continue;
+
+        // ✅ MATCH SUB OFFER CORRECTLY
+        let subOffer =
+          offer.subOffers?.find(
+            (s) => s.id === applicable.subOfferId
+          ) || offer.subOffers?.[0];
+
         if (!subOffer) continue;
 
-        if (totalSellingPrice < subOffer.minOrderValue) continue;
+        const minOrderValue = Number(
+          subOffer.minOrderValue || 0
+        );
 
-        if (subOffer.discountType === "PERCENTAGE") {
-          let discount = (totalSellingPrice * subOffer.discountValue) / 100;
-          if (subOffer.maxDiscount) {
-            discount = Math.min(discount, subOffer.maxDiscount);
-          }
-          itemOfferDiscount = discount;
-          offerDiscountType = "PERCENTAGE";
-          offerDiscountValue = subOffer.discountValue;
-        } else if (subOffer.discountType === "FLAT") {
-          itemOfferDiscount = subOffer.discountValue;
-          offerDiscountType = "FLAT";
-          offerDiscountValue = subOffer.discountValue;
+        if (totalSellingPrice < minOrderValue) {
+          continue;
         }
 
-        offerApplied = true;
-        appliedOfferId = offer.id;
-        appliedSubOfferId = subOffer.id;
-        break;
+        let calculatedDiscount = 0;
+
+        // ================= PERCENTAGE =================
+
+        if (
+          subOffer.discountType === "PERCENTAGE"
+        ) {
+          calculatedDiscount =
+            (totalSellingPrice *
+              Number(subOffer.discountValue || 0)) /
+            100;
+
+          const maxDiscount = Number(
+            subOffer.maxDiscount || 0
+          );
+
+          if (
+            maxDiscount > 0 &&
+            calculatedDiscount > maxDiscount
+          ) {
+            calculatedDiscount = maxDiscount;
+          }
+        }
+
+        // ================= FLAT =================
+
+        else if (
+          subOffer.discountType === "FLAT"
+        ) {
+          calculatedDiscount = Number(
+            subOffer.discountValue || 0
+          );
+
+          // ✅ NEVER EXCEED ITEM TOTAL
+          calculatedDiscount = Math.min(
+            calculatedDiscount,
+            totalSellingPrice
+          );
+        }
+
+        // ✅ APPLY BEST OFFER ONLY
+        if (calculatedDiscount > itemOfferDiscount) {
+          itemOfferDiscount = calculatedDiscount;
+
+          offerApplied = true;
+
+          appliedOfferId = offer.id;
+
+          appliedSubOfferId = subOffer.id;
+
+          offerDiscountType =
+            subOffer.discountType;
+
+          offerDiscountValue =
+            subOffer.discountValue;
+
+          offerCode = offer.offerCode;
+
+          offerTitle = offer.title;
+        }
       }
 
-      const finalAmount = totalSellingPrice - itemOfferDiscount;
+      // ================= FINAL ITEM AMOUNT =================
+
+      const finalAmount =
+        totalSellingPrice - itemOfferDiscount;
 
       if (isAvailable) {
         subTotal += finalAmount;
+
         productOfferDiscount += itemOfferDiscount;
 
-        // Track eligible amount for coupon (only items without offer)
+        // ✅ ONLY NON OFFER ITEMS ELIGIBLE
         if (!offerApplied) {
-          eligibleForCouponTotal += totalSellingPrice;
+          eligibleForCouponTotal += finalAmount;
         }
       }
 
+      // ================= STORE ITEM =================
+
       processedItems.push({
-        // Basic Info
         productId: item.productId,
+
         variantId: item.variantId,
+
         sizeId: item.sizeId,
-        productName: item.product?.title || "Unknown Product",
+
+        productName:
+          item.product?.title || "Unknown Product",
+
         variantInfo: {
           colorName: item.variant?.colorName,
           colorCode: item.variant?.colorCode,
@@ -1370,25 +943,33 @@ exports.placeOrder = async (req, res) => {
           size: item.variantSize?.size,
         },
 
-        // Base Pricing
+        // BASE PRICE
         mrp,
         sellingPrice,
         discountPercentage,
+
         quantity: validQuantity,
 
-        // Totals with Quantity
+        // TOTALS
         totalMrp,
         totalSellingPrice,
 
-        // Offer Details
+        // OFFER
         offerId: appliedOfferId,
         subOfferId: appliedSubOfferId,
+
+        offerCode,
+        offerTitle,
+
         offerDiscountType,
         offerDiscountValue,
-        offerDiscountAmount: itemOfferDiscount,
+
+        offerDiscountAmount:
+          itemOfferDiscount,
+
         offerApplied,
 
-        // After Offer
+        // FINAL AFTER OFFER
         finalAmount,
 
         // GST
@@ -1396,285 +977,593 @@ exports.placeOrder = async (req, res) => {
       });
     }
 
-    // 6️⃣ Calculate Coupon Discount (based on eligible items only)
+    // =====================================================
+    // COUPON
+    // =====================================================
+
     let couponDiscount = 0;
     let appliedCouponCode = null;
 
-    if (couponCode && eligibleForCouponTotal > 0) {
+    if (
+      couponCode &&
+      eligibleForCouponTotal > 0
+    ) {
       const coupon = await Coupon.findOne({
         where: {
           code: couponCode,
           isActive: true,
-          startDate: { [Op.lte]: now },
-          endDate: { [Op.gte]: now },
+
+          startDate: {
+            [Op.lte]: now,
+          },
+
+          endDate: {
+            [Op.gte]: now,
+          },
         },
+
         transaction: t,
       });
 
       if (coupon) {
-        const minCartValue = Number(coupon.minCartValue || 0);
+        const minCartValue = Number(
+          coupon.minCartValue || 0
+        );
 
-        if (eligibleForCouponTotal >= minCartValue) {
+        if (
+          eligibleForCouponTotal >= minCartValue
+        ) {
           appliedCouponCode = coupon.code;
 
-          if (coupon.discountType === "PERCENTAGE") {
+          // ================= PERCENTAGE =================
+
+          if (
+            coupon.discountType === "PERCENTAGE"
+          ) {
             let discount =
-              (eligibleForCouponTotal * Number(coupon.discountValue || 0)) /
+              (eligibleForCouponTotal *
+                Number(
+                  coupon.discountValue || 0
+                )) /
               100;
-            if (coupon.maxDiscount) {
-              discount = Math.min(discount, Number(coupon.maxDiscount));
+
+            const maxDiscount = Number(
+              coupon.maxDiscount || 0
+            );
+
+            if (
+              maxDiscount > 0 &&
+              discount > maxDiscount
+            ) {
+              discount = maxDiscount;
             }
+
             couponDiscount = discount;
-          } else if (coupon.discountType === "FLAT") {
-            const flatDiscount = Number(coupon.discountValue || 0);
-            couponDiscount = Math.min(flatDiscount, eligibleForCouponTotal);
+          }
+
+          // ================= FLAT =================
+
+          else if (
+            coupon.discountType === "FLAT"
+          ) {
+            couponDiscount = Math.min(
+              Number(
+                coupon.discountValue || 0
+              ),
+              eligibleForCouponTotal
+            );
           }
         }
       }
     }
 
-    // 7️⃣ Apply Coupon and Calculate Final Values
+    // =====================================================
+    // FINAL ITEM CALCULATIONS
+    // =====================================================
+
     let taxAmount = 0;
+
     const finalProcessedItems = [];
 
-    for (let item of processedItems) {
+    for (const item of processedItems) {
       let itemCouponDiscount = 0;
 
-      // Apply coupon only to eligible items proportionally
+      // ✅ APPLY COUPON ONLY ON NON OFFER ITEMS
       if (
         appliedCouponCode &&
         !item.offerApplied &&
         eligibleForCouponTotal > 0
       ) {
-        const proportion = item.totalSellingPrice / eligibleForCouponTotal;
-        itemCouponDiscount = couponDiscount * proportion;
+        const proportion =
+          item.finalAmount /
+          eligibleForCouponTotal;
+
+        itemCouponDiscount =
+          couponDiscount * proportion;
       }
 
-      // Calculate subtotal (price after offer and coupon)
-      const subtotal = item.finalAmount - itemCouponDiscount;
+      // ================= SUBTOTAL =================
 
-      // Calculate total discount
-      const totalDiscount = item.offerDiscountAmount + itemCouponDiscount;
+      const subtotal =
+        item.finalAmount - itemCouponDiscount;
 
-      // Calculate GST
-      const gstAmount = Math.round((subtotal * item.gstRate) / 100);
+      // ================= TOTAL DISCOUNT =================
+
+      const totalDiscount =
+        item.offerDiscountAmount +
+        itemCouponDiscount;
+
+      // ================= GST =================
+
+      const gstAmount = Math.round(
+        (subtotal * item.gstRate) / 100
+      );
+
       taxAmount += gstAmount;
 
-      // Final price with GST
-      const finalPrice = subtotal + gstAmount;
+      // ================= FINAL PRICE =================
+
+      const finalPrice =
+        subtotal + gstAmount;
 
       finalProcessedItems.push({
         ...item,
-        couponDiscountAmount: itemCouponDiscount,
+
+        couponDiscountAmount:
+          itemCouponDiscount,
+
         subtotal,
+
         totalDiscount,
+
         gstAmount,
+
         finalPrice,
       });
     }
 
-    const finalSubTotal = subTotal - couponDiscount;
+    // =====================================================
+    // FINAL TOTALS
+    // =====================================================
 
-    // 8️⃣ Calculate Shipping Fee - NOW USING STATIC FEE FROM ADMIN
-    const shippingFee = STATIC_SHIPPING_FEE;
-    const grandTotal = finalSubTotal + taxAmount + shippingFee;
+    const finalSubTotal =
+      subTotal - couponDiscount;
 
-    const orderNumber = generateOrderNumber();
-    // Generate 6-digit OTP
-    const otp = Math.floor(1000 + Math.random() * 9000).toString();
-    console.log(`OTP generated for order ${orderNumber}: ${otp}`);
+    const shippingFee =
+      STATIC_SHIPPING_FEE;
 
-    // 🔟 Create Order (COMPLETELY UNCHANGED - YOUR EXISTING CODE)
+    const grandTotal =
+      finalSubTotal +
+      taxAmount +
+      shippingFee;
+
+    // =====================================================
+    // ORDER
+    // =====================================================
+
+    const orderNumber =
+      generateOrderNumber();
+
+    const otp = Math.floor(
+      1000 + Math.random() * 9000
+    ).toString();
+
     const order = await Order.create(
       {
         orderNumber,
+
         userId,
-        otp: otp,
+
+        otp,
+
         otpVerified: false,
 
-        // Discount Breakup
+        // DISCOUNTS
         totalOriginalAmount,
+
         productOfferDiscount,
+
         couponDiscount,
-        totalDiscount: productOfferDiscount + couponDiscount,
+
+        totalDiscount:
+          productOfferDiscount +
+          couponDiscount,
+
         couponCode: appliedCouponCode,
 
-        // Amounts
+        // AMOUNTS
         subtotal: finalSubTotal,
+
         shippingFee,
+
         taxAmount,
+
         totalAmount: grandTotal,
 
-        // Status
-        status: paymentMethod === "COD" ? "confirmed" : "pending",
-        paymentMethod,
-        paymentStatus: paymentMethod === "COD" ? "unpaid" : "unpaid",
+        // STATUS
+        status:
+          paymentMethod === "COD"
+            ? "confirmed"
+            : "pending",
 
-        // Timestamps
-        confirmedAt: paymentMethod === "COD" ? new Date() : null,
+        paymentMethod,
+
+        paymentStatus: "unpaid",
+
+        confirmedAt:
+          paymentMethod === "COD"
+            ? new Date()
+            : null,
       },
-      { transaction: t },
+      { transaction: t }
     );
 
-    // 1️⃣1️⃣ Create Order Items (MODIFIED - USING NEW MODEL FIELDS)
-    const orderItems = finalProcessedItems.map((item) => ({
-      orderId: order.id,
-      productId: item.productId,
-      variantId: item.variantId,
-      sizeId: item.sizeId,
+    // =====================================================
+    // ORDER ITEMS
+    // =====================================================
 
-      // Product Details
-      productName: item.productName,
-      variantInfo: item.variantInfo,
+    const orderItems =
+      finalProcessedItems.map((item) => ({
+        orderId: order.id,
 
-      // Base Pricing
-      mrp: item.mrp,
-      sellingPrice: item.sellingPrice,
-      discountPercentage: item.discountPercentage,
-      quantity: item.quantity,
+        productId: item.productId,
 
-      // Totals with Quantity
-      totalMrp: item.totalMrp,
-      totalSellingPrice: item.totalSellingPrice,
+        variantId: item.variantId,
 
-      // Offer Details
-      offerId: item.offerId,
-      subOfferId: item.subOfferId,
-      offerDiscountType: item.offerDiscountType,
-      offerDiscountValue: item.offerDiscountValue,
-      offerDiscountAmount: item.offerDiscountAmount,
-      finalAmount: item.finalAmount,
+        sizeId: item.sizeId,
 
-      // Coupon Details
-      couponDiscountAmount: item.couponDiscountAmount,
+        // PRODUCT
+        productName: item.productName,
 
-      // Final Calculations
-      subtotal: item.subtotal,
-      totalDiscount: item.totalDiscount,
+        variantInfo: item.variantInfo,
 
-      // GST
-      gstRate: item.gstRate,
-      gstAmount: item.gstAmount,
-      finalPrice: item.finalPrice,
+        // PRICE
+        mrp: item.mrp,
 
-      // Offer Applied Flag
-      offerApplied: item.offerApplied,
-    }));
+        sellingPrice: item.sellingPrice,
 
-    await OrderItem.bulkCreate(orderItems, { transaction: t });
+        discountPercentage:
+          item.discountPercentage,
 
-    // 1️⃣2️⃣ Save Address Snapshot
+        quantity: item.quantity,
+
+        totalMrp: item.totalMrp,
+
+        totalSellingPrice:
+          item.totalSellingPrice,
+
+        // OFFER
+        offerId: item.offerId,
+
+        subOfferId: item.subOfferId,
+
+        offerDiscountType:
+          item.offerDiscountType,
+
+        offerDiscountValue:
+          item.offerDiscountValue,
+
+        offerDiscountAmount:
+          item.offerDiscountAmount,
+
+        offerApplied: item.offerApplied,
+
+        finalAmount: item.finalAmount,
+
+        // COUPON
+        couponDiscountAmount:
+          item.couponDiscountAmount,
+
+        // TOTALS
+        subtotal: item.subtotal,
+
+        totalDiscount:
+          item.totalDiscount,
+
+        // GST
+        gstRate: item.gstRate,
+
+        gstAmount: item.gstAmount,
+
+        finalPrice: item.finalPrice,
+      }));
+
+    await OrderItem.bulkCreate(
+      orderItems,
+      {
+        transaction: t,
+      }
+    );
+
+    // =====================================================
+    // ORDER ADDRESS
+    // =====================================================
+
     await OrderAddress.create(
       {
         orderId: order.id,
+
         fullName: userAddress.fullName,
+
         email: userAddress.email,
-        phoneNumber: userAddress.phoneNumber,
-        addressLine: userAddress.addressLine,
+
+        phoneNumber:
+          userAddress.phoneNumber,
+
+        addressLine:
+          userAddress.addressLine,
+
         country: userAddress.country,
+
         city: userAddress.city,
+
         state: userAddress.state,
+
         zipCode: userAddress.zipCode,
+
         landmark: userAddress.landmark,
-        addressType: userAddress.addressType,
+
+        addressType:
+          userAddress.addressType,
       },
-      { transaction: t },
-    );
-    await Product.increment(
-      { soldCount: item.quantity },
-      {
-        where: { id: item.productId },
-        transaction: t,
-      },
+      { transaction: t }
     );
 
-    // 1️⃣3️⃣ Handle based on Payment Method
+    // =====================================================
+    // SOLD COUNT
+    // =====================================================
+
+    for (const item of processedItems) {
+      await Product.increment(
+        {
+          soldCount: item.quantity,
+        },
+        {
+          where: {
+            id: item.productId,
+          },
+
+          transaction: t,
+        }
+      );
+    }
+
+    // =====================================================
+    // COD
+    // =====================================================
+
     if (paymentMethod === "COD") {
-      // Deduct stock
+      // STOCK DEDUCT
       for (const item of processedItems) {
-        await VariantSize.decrement("stock", {
-          by: item.quantity,
-          where: { id: item.sizeId },
-          transaction: t,
-        });
+        await VariantSize.decrement(
+          "stock",
+          {
+            by: item.quantity,
 
-        await ProductVariant.decrement("totalStock", {
-          by: item.quantity,
-          where: { id: item.variantId },
-          transaction: t,
-        });
+            where: {
+              id: item.sizeId,
+            },
+
+            transaction: t,
+          }
+        );
+
+        await ProductVariant.decrement(
+          "totalStock",
+          {
+            by: item.quantity,
+
+            where: {
+              id: item.variantId,
+            },
+
+            transaction: t,
+          }
+        );
       }
 
-      // Clear cart and coupon
-      await CartItem.destroy({ where: { userId }, transaction: t });
-      await CartCoupon.destroy({ where: { userId }, transaction: t });
-
-      await t.commit();
-
-      return res.status(200).json({
-        success: true,
-        message: "Order placed successfully",
-        data: {
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          totalAmount: grandTotal,
-          paymentMethod: "COD",
-          paymentStatus: "unpaid",
-          status: "confirmed",
-        },
+      // CLEAR CART
+      await CartItem.destroy({
+        where: { userId },
+        transaction: t,
       });
-    } else if (paymentMethod === "ICICI") {
+
+      await CartCoupon.destroy({
+        where: { userId },
+        transaction: t,
+      });
+
       await t.commit();
 
-      const paymentData = {
-        merchantId: process.env.ICICI_MERCHANT_ID,
-        orderNumber: order.orderNumber,
-        amount: grandTotal.toFixed(2),
-        currency: "INR",
-        returnUrl: process.env.ICICI_RETURN_URL,
-        cancelUrl: process.env.ICICI_CANCEL_URL,
-        customerName: userAddress.fullName,
-        customerEmail: userAddress.email,
-        customerMobile: userAddress.phoneNumber,
-      };
+      // INVOICE
+      const invoicePath =
+        await generateInvoice(
+          order,
+          finalProcessedItems,
+          userAddress
+        );
 
-      const payload = JSON.stringify(paymentData);
-      const encData = encrypt(payload, process.env.ICICI_ENCRYPTION_KEY);
-      const checksum = generateChecksum(
-        encData,
-        process.env.ICICI_CHECKSUM_KEY,
+      const recipientEmails = [
+        user.email,
+      ];
+
+      if (
+        userAddress.email &&
+        userAddress.email !== user.email
+      ) {
+        recipientEmails.push(
+          userAddress.email
+        );
+      }
+
+      await sendInvoiceEmail(
+        recipientEmails,
+        order,
+        finalProcessedItems,
+        userAddress,
+        invoicePath
       );
 
       return res.status(200).json({
         success: true,
-        message: "Order created, proceeding to payment",
+
+        message:
+          "Order placed successfully",
+
         data: {
           orderId: order.id,
-          orderNumber: order.orderNumber,
+
+          orderNumber:
+            order.orderNumber,
+
           totalAmount: grandTotal,
-          paymentMethod: "ICICI",
+
+          paymentMethod: "COD",
+
           paymentStatus: "unpaid",
-          status: "pending",
-          paymentDetails: {
-            paymentUrl: process.env.ICICI_PAYMENT_URL,
-            encData,
-            checksum,
-            merchantId: process.env.ICICI_MERCHANT_ID,
-          },
+
+          status: "confirmed",
         },
       });
-    } else {
+    }
+
+    // =====================================================
+    // ICICI
+    // =====================================================
+
+    else if (paymentMethod === "ICICI") {
       await t.commit();
+
+      const paymentData = {
+        merchantId:
+          process.env.ICICI_MERCHANT_ID,
+
+        orderNumber:
+          order.orderNumber,
+
+        amount:
+          grandTotal.toFixed(2),
+
+        currency: "INR",
+
+        returnUrl:
+          process.env.ICICI_RETURN_URL,
+
+        cancelUrl:
+          process.env.ICICI_CANCEL_URL,
+
+        customerName:
+          userAddress.fullName,
+
+        customerEmail:
+          userAddress.email,
+
+        customerMobile:
+          userAddress.phoneNumber,
+      };
+
+      const payload =
+        JSON.stringify(paymentData);
+
+      const encData = encrypt(
+        payload,
+        process.env.ICICI_ENCRYPTION_KEY
+      );
+
+      const checksum =
+        generateChecksum(
+          encData,
+          process.env.ICICI_CHECKSUM_KEY
+        );
 
       return res.status(200).json({
         success: true,
-        message: "Order created successfully",
+
+        message:
+          "Order created, proceeding to payment",
+
         data: {
           orderId: order.id,
-          orderNumber: order.orderNumber,
+
+          orderNumber:
+            order.orderNumber,
+
           totalAmount: grandTotal,
-          paymentMethod,
+
+          paymentMethod: "ICICI",
+
           paymentStatus: "unpaid",
+
+          status: "pending",
+
+          paymentDetails: {
+            paymentUrl:
+              process.env.ICICI_PAYMENT_URL,
+
+            encData,
+
+            checksum,
+
+            merchantId:
+              process.env.ICICI_MERCHANT_ID,
+          },
+        },
+      });
+    }
+
+    // =====================================================
+    // OTHER PAYMENTS
+    // =====================================================
+
+    else {
+      await t.commit();
+
+      const invoicePath =
+        await generateInvoice(
+          order,
+          finalProcessedItems,
+          userAddress
+        );
+
+      const recipientEmails = [
+        user.email,
+      ];
+
+      if (
+        userAddress.email &&
+        userAddress.email !== user.email
+      ) {
+        recipientEmails.push(
+          userAddress.email
+        );
+      }
+
+      await sendInvoiceEmail(
+        recipientEmails,
+        order,
+        finalProcessedItems,
+        userAddress,
+        invoicePath
+      );
+
+      return res.status(200).json({
+        success: true,
+
+        message:
+          "Order created successfully",
+
+        data: {
+          orderId: order.id,
+
+          orderNumber:
+            order.orderNumber,
+
+          totalAmount: grandTotal,
+
+          paymentMethod,
+
+          paymentStatus: "unpaid",
+
           status: "pending",
         },
       });
@@ -1684,11 +1573,17 @@ exports.placeOrder = async (req, res) => {
       await t.rollback();
     }
 
-    console.error("Place Order Error:", error);
+    console.error(
+      "Place Order Error:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
-      message: error.message || "Something went wrong while placing order",
+
+      message:
+        error.message ||
+        "Something went wrong while placing order",
     });
   }
 };

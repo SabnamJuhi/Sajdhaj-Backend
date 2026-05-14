@@ -53,7 +53,7 @@ Product.init(
     },
     gstRate: {
       type: DataTypes.DECIMAL(5, 2), // 5.00, 12.00, 18.00, 28.00
-      allowNull: false,
+      allowNull: true,
       defaultValue: 0,
     },
     isActive: {

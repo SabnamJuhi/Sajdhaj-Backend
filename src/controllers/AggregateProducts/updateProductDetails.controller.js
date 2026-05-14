@@ -10,7 +10,6 @@ const { OfferApplicableProduct } = require("../../models");
 const fs = require("fs");
 const path = require("path");
 
-
 // const cloudinary = require("../../config/cloudinary");
 
 /* ---------------- SAFE JSON PARSER ---------------- */
@@ -287,24 +286,57 @@ exports.updateProductDetails = async (req, res) => {
       });
     }
 
+    // /* ---------------- UPDATE OFFERS ---------------- */
+    // if (appliedOffers) {
+    //   const parsedAppliedOffers = parseJSON(appliedOffers, "appliedOffers");
+
+    //   await OfferApplicableProduct.destroy({
+    //     where: { productId: productId },
+    //     transaction: t,
+    //   });
+
+    //   if (parsedAppliedOffers.length) {
+    //     await OfferApplicableProduct.bulkCreate(
+    //       parsedAppliedOffers.map((o) => ({
+    //         productId: productId,
+    //         offerId: o.offerId,
+    //         subOfferId: o.subOfferId,
+    //       })),
+    //       { transaction: t },
+    //     );
+    //   }
+    // }
     /* ---------------- UPDATE OFFERS ---------------- */
     if (appliedOffers) {
       const parsedAppliedOffers = parseJSON(appliedOffers, "appliedOffers");
 
+      // Remove all existing mappings first
       await OfferApplicableProduct.destroy({
-        where: { productId: productId },
+        where: { productId },
         transaction: t,
       });
 
       if (parsedAppliedOffers.length) {
-        await OfferApplicableProduct.bulkCreate(
-          parsedAppliedOffers.map((o) => ({
-            productId: productId,
-            offerId: o.offerId,
-            subOfferId: o.subOfferId,
-          })),
-          { transaction: t },
-        );
+        // keep only the latest subOffer per offer
+        const uniqueOffersMap = new Map();
+
+        for (const offer of parsedAppliedOffers) {
+          uniqueOffersMap.set(offer.offerId, offer.subOfferId);
+        }
+
+        const rows = [];
+
+        for (const [offerId, subOfferId] of uniqueOffersMap.entries()) {
+          rows.push({
+            productId,
+            offerId,
+            subOfferId,
+          });
+        }
+
+        await OfferApplicableProduct.bulkCreate(rows, {
+          transaction: t,
+        });
       }
     }
 
@@ -324,198 +356,3 @@ exports.updateProductDetails = async (req, res) => {
     });
   }
 };
-
-// const sequelize = require("../../config/db");
-
-// const Product = require("../../models/products/product.model");
-// const ProductPrice = require("../../models/products/price.model");
-// const ProductSpec = require("../../models/products/productSpec.model");
-// const ProductVariant = require("../../models/productVariants/productVariant.model");
-// const VariantImage = require("../../models/productVariants/variantImage.model");
-// const VariantSize = require("../../models/productVariants/variantSize.model");
-// const OfferApplicableProduct = require("../../models/offers/offerApplicableProduct.model");
-
-// /* ---------------- SAFE JSON PARSER ---------------- */
-// const parseJSON = (data, fieldName) => {
-//   try {
-//     return typeof data === "string" ? JSON.parse(data) : data;
-//   } catch {
-//     throw new Error(`Invalid JSON format in "${fieldName}"`);
-//   }
-// };
-
-// exports.updateProductDetails = async (req, res) => {
-//   const t = await sequelize.transaction();
-
-//   try {
-//     const { id } = req.params;
-
-//     const {
-//       title,
-//       brandName,
-//       categoryId,
-//       subCategoryId,
-//       productCategoryId,
-//       description,
-//       badge,
-//       price,
-//       specs,
-//       variants,
-//       appliedOffers,
-//       gstRate,
-//     } = req.body;
-
-//     /* ---------------- FIND PRODUCT ---------------- */
-//     const product = await Product.findByPk(id, { transaction: t });
-//     if (!product) throw new Error("Product not found");
-
-//     /* ---------------- GST VALIDATION ---------------- */
-//     if (gstRate !== undefined) {
-//       const numericGst = Number(gstRate);
-//       if (isNaN(numericGst)) throw new Error("Invalid GST rate");
-//       product.gstRate = numericGst;
-//     }
-
-//     /* ---------------- UPDATE BASIC PRODUCT ---------------- */
-//     await product.update(
-//       {
-//         title: title ?? product.title,
-//         brandName: brandName ?? product.brandName,
-//         categoryId: categoryId ? Number(categoryId) : product.categoryId,
-//         subCategoryId: subCategoryId
-//           ? Number(subCategoryId)
-//           : product.subCategoryId,
-//         productCategoryId: productCategoryId
-//           ? Number(productCategoryId)
-//           : product.productCategoryId,
-//         description: description ?? product.description,
-//         badge: badge ?? product.badge,
-//       },
-//       { transaction: t },
-//     );
-
-//     /* ---------------- UPDATE PRICE ---------------- */
-//     if (price) {
-//       const parsedPrice = parseJSON(price, "price");
-
-//       const existingPrice = await ProductPrice.findOne({
-//         where: { productId: id },
-//         transaction: t,
-//       });
-
-//       if (existingPrice) {
-//         await existingPrice.update(
-//           {
-//             mrp: parsedPrice.mrp,
-//             sellingPrice: parsedPrice.sellingPrice,
-//             discountPercentage:
-//               parsedPrice.mrp > parsedPrice.sellingPrice
-//                 ? Math.round(
-//                     ((parsedPrice.mrp - parsedPrice.sellingPrice) /
-//                       parsedPrice.mrp) *
-//                       100,
-//                   )
-//                 : 0,
-//             currency: parsedPrice.currency || "INR",
-//           },
-//           { transaction: t },
-//         );
-//       }
-//     }
-
-//     /* ---------------- UPDATE SPECS ---------------- */
-//     if (specs) {
-//       const parsedSpecs = parseJSON(specs, "specs");
-
-//       await ProductSpec.destroy({ where: { productId: id }, transaction: t });
-
-//       const specRows = Object.keys(parsedSpecs).map((key) => ({
-//         productId: id,
-//         specKey: key,
-//         specValue: Array.isArray(parsedSpecs[key])
-//           ? parsedSpecs[key].join(", ")
-//           : parsedSpecs[key],
-//       }));
-
-//       if (specRows.length) {
-//         await ProductSpec.bulkCreate(specRows, { transaction: t });
-//       }
-//     }
-
-//     /* ---------------- UPDATE VARIANTS ---------------- */
-//     if (variants) {
-//       const parsedVariants = parseJSON(variants, "variants");
-
-//       // // delete old variants (cascade images & sizes)
-//       // await ProductVariant.destroy({
-//       //   where: { productId: id },
-//       //   transaction: t,
-//       // });
-
-//       for (const v of parsedVariants) {
-//         const variant = await ProductVariant.create(
-//           {
-//             productId: id,
-//             variantCode: v.variantCode,
-//             colorName: v.color?.name,
-//             colorCode: v.color?.code,
-//             swatch: v.color?.swatch || null,
-//             totalStock: v.totalStock || 0,
-//             stockStatus: v.stockStatus || "Out of Stock",
-//           },
-//           { transaction: t },
-//         );
-
-//         /* sizes */
-//         if (Array.isArray(v.sizes) && v.sizes.length) {
-//           await VariantSize.bulkCreate(
-//             v.sizes.map((s) => ({
-//               variantId: variant.id,
-//               size: s.size,
-//               stock: s.stock,
-//               chest: s.chest ?? null,
-//             })),
-//             { transaction: t },
-//           );
-//         }
-//       }
-//     }
-
-//     /* ---------------- UPDATE OFFERS ---------------- */
-//     if (appliedOffers) {
-//       const parsedAppliedOffers = parseJSON(appliedOffers, "appliedOffers");
-
-//       await OfferApplicableProduct.destroy({
-//         where: { productId: id },
-//         transaction: t,
-//       });
-
-//       if (parsedAppliedOffers.length) {
-//         await OfferApplicableProduct.bulkCreate(
-//           parsedAppliedOffers.map((o) => ({
-//             productId: id,
-//             offerId: o.offerId,
-//             subOfferId: o.subOfferId,
-//           })),
-//           { transaction: t },
-//         );
-//       }
-//     }
-
-//     await t.commit();
-
-//     return res.json({
-//       success: true,
-//       message: "Product updated successfully (GST included)",
-//     });
-//   } catch (error) {
-//     await t.rollback();
-
-//     console.error("UPDATE PRODUCT ERROR:", error);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: error.message || "Product update failed",
-//     });
-//   }
-// };
