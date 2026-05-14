@@ -544,6 +544,7 @@ exports.getActiveOrders = async (req, res) => {
         orderDetails: {
           id: order.id,
           orderNumber: order.orderNumber,
+          otp: order.otp,
           
           // Order Status
           status: order.status,
