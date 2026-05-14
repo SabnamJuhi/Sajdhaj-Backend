@@ -72,14 +72,14 @@ exports.createProduct = async (req, res) => {
       const imagePath = `/uploads/products/${file.filename}`;
       variantImagesMap[index].push(imagePath);
     }
-    if (gstRate === undefined || gstRate === null) {
-      throw new Error("GST rate is required");
-    }
-    const numericGst = Number(gstRate);
+    // if (gstRate === undefined || gstRate === null) {
+    //   throw new Error("GST rate is required");
+    // }
+    // const numericGst = Number(gstRate);
 
-    if (isNaN(numericGst)) {
-      throw new Error("Invalid GST rate");
-    }
+    // if (isNaN(numericGst)) {
+    //   throw new Error("Invalid GST rate");
+    // }
     /* ---------------- CREATE PRODUCT ---------------- */
     const product = await Product.create(
       {
@@ -90,7 +90,7 @@ exports.createProduct = async (req, res) => {
         productCategoryId: Number(productCategoryId),
         description,
         badge,
-        gstRate: numericGst,
+        gstRate,
       },
       { transaction: t },
     );
