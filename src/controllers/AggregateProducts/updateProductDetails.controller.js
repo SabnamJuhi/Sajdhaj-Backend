@@ -56,13 +56,7 @@ exports.updateProductDetails = async (req, res) => {
         ...(categoryId !== undefined && { categoryId }),
         ...(subCategoryId !== undefined && { subCategoryId }),
         ...(productCategoryId !== undefined && { productCategoryId }),
-        ...(gstRate !== undefined && {
-          gstRate: isNaN(Number(gstRate))
-            ? (() => {
-                throw new Error("Invalid GST rate");
-              })()
-            : Number(gstRate),
-        }),
+        ...(gstRate !== undefined && {gstRate }),
         // ...(isActive !== undefined && { isActive }),
       },
       { transaction: t },
@@ -286,26 +280,7 @@ exports.updateProductDetails = async (req, res) => {
       });
     }
 
-    // /* ---------------- UPDATE OFFERS ---------------- */
-    // if (appliedOffers) {
-    //   const parsedAppliedOffers = parseJSON(appliedOffers, "appliedOffers");
-
-    //   await OfferApplicableProduct.destroy({
-    //     where: { productId: productId },
-    //     transaction: t,
-    //   });
-
-    //   if (parsedAppliedOffers.length) {
-    //     await OfferApplicableProduct.bulkCreate(
-    //       parsedAppliedOffers.map((o) => ({
-    //         productId: productId,
-    //         offerId: o.offerId,
-    //         subOfferId: o.subOfferId,
-    //       })),
-    //       { transaction: t },
-    //     );
-    //   }
-    // }
+    
     /* ---------------- UPDATE OFFERS ---------------- */
     if (appliedOffers) {
       const parsedAppliedOffers = parseJSON(appliedOffers, "appliedOffers");
