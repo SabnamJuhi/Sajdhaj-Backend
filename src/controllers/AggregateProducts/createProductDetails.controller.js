@@ -42,7 +42,7 @@ exports.createProduct = async (req, res) => {
     if (!title || !categoryId || !subCategoryId ) {
       throw new Error("Missing required product fields");
     }
-
+//nbhg
     const parsedPrice = parseJSON(price, "price")
     const parsedSpecs = parseJSON(specs, "specs");
     const parsedVariants = parseJSON(variants, "variants");
