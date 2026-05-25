@@ -43,7 +43,9 @@ exports.createProduct = async (req, res) => {
       throw new Error("Missing required product fields");
     }
  ///nsdghgsdg
-    const parsedPrice = parseJSON(price, "price");
+ //sndbhwgedhgwe
+ //wdjebwjehdjhw
+    const parsedPrice = parseJSON(price, "price")
     const parsedSpecs = parseJSON(specs, "specs");
     const parsedVariants = parseJSON(variants, "variants");
     const parsedAppliedOffers = appliedOffers
