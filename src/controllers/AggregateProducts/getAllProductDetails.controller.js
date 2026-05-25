@@ -53,7 +53,7 @@ exports.getAllProductsDetails = async (req, res) => {
       include: [
         { model: Category, as: "Category", attributes: ["id", "name"] },
         { model: SubCategory, as: "SubCategory", attributes: ["id", "name"] },
-        { model: ProductCategory, as: "ProductCategory", attributes: ["id", "name"] },
+        // { model: ProductCategory, as: "ProductCategory", attributes: ["id", "name"] },
 
         { model: ProductPrice, as: "price" },
         { model: ProductSpec, as: "specs" },
