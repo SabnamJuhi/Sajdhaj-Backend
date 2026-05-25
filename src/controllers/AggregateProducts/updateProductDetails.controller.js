@@ -31,7 +31,7 @@ exports.updateProductDetails = async (req, res) => {
       brandName,
       categoryId,
       subCategoryId,
-      productCategoryId,
+      // productCategoryId,
       description,
       badge,
       price,
@@ -55,7 +55,7 @@ exports.updateProductDetails = async (req, res) => {
         // ✅ ADD THESE
         ...(categoryId !== undefined && { categoryId }),
         ...(subCategoryId !== undefined && { subCategoryId }),
-        ...(productCategoryId !== undefined && { productCategoryId }),
+        // ...(productCategoryId !== undefined && { productCategoryId }),
         ...(gstRate !== undefined && {gstRate }),
         // ...(isActive !== undefined && { isActive }),
       },

@@ -37,10 +37,10 @@ Product.init(
       allowNull: false,
     },
 
-    productCategoryId: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-    },
+    // productCategoryId: {
+    //   type: DataTypes.INTEGER,
+    //   allowNull: false,
+    // },
     description: {
       type: DataTypes.TEXT,
     },

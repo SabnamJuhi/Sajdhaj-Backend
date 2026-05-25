@@ -29,7 +29,7 @@ exports.createProduct = async (req, res) => {
       brandName,
       categoryId,
       subCategoryId,
-      productCategoryId,
+      // productCategoryId,
       description,
       badge,
       price,
@@ -39,7 +39,7 @@ exports.createProduct = async (req, res) => {
       gstRate,
     } = req.body;
 
-    if (!title || !categoryId || !subCategoryId || !productCategoryId) {
+    if (!title || !categoryId || !subCategoryId ) {
       throw new Error("Missing required product fields");
     }
 
@@ -87,7 +87,7 @@ exports.createProduct = async (req, res) => {
         brandName,
         categoryId: Number(categoryId),
         subCategoryId: Number(subCategoryId),
-        productCategoryId: Number(productCategoryId),
+        // productCategoryId: Number(productCategoryId),
         description,
         badge,
         gstRate,
@@ -95,25 +95,7 @@ exports.createProduct = async (req, res) => {
       { transaction: t },
     );
 
-    /* ---------------- PRICE ---------------- */
-    // await ProductPrice.upsert(
-    //   {
-    //     productId: product.id,
-    //     mrp: parsedPrice.mrp,
-    //     sellingPrice: parsedPrice.sellingPrice,
-    //     discountPercentage:
-    //       parsedPrice.mrp > parsedPrice.sellingPrice
-    //         ? Math.round(
-    //             ((parsedPrice.mrp - parsedPrice.sellingPrice) /
-    //               parsedPrice.mrp) *
-    //               100,
-    //           )
-    //         : 0,
-    //     currency: parsedPrice.currency || "INR",
-    //   },
-    //   { transaction: t },
-    // );
-
+    
     const calculatedPrice = calculatePrice({
       mrp: parsedPrice.mrp,
       sellingPrice: parsedPrice.sellingPrice,

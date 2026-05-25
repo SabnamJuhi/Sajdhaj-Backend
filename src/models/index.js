@@ -59,11 +59,11 @@ ProductCategory.belongsTo(SubCategory, {foreignKey: "subCategoryId",as: "subCate
 // Product relations
 Category.hasMany(Product, { foreignKey: "categoryId" })
 SubCategory.hasMany(Product, { foreignKey: "subCategoryId" })
-ProductCategory.hasMany(Product, { foreignKey: "productCategoryId" })
+// ProductCategory.hasMany(Product, { foreignKey: "productCategoryId" })
 
 Product.belongsTo(Category, { foreignKey: "categoryId" })
 Product.belongsTo(SubCategory, { foreignKey: "subCategoryId" })
-Product.belongsTo(ProductCategory, { foreignKey: "productCategoryId" })
+// Product.belongsTo(ProductCategory, { foreignKey: "productCategoryId" })
 
 
 
