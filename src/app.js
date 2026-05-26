@@ -10,13 +10,12 @@ const allowedOrigins = [
   "https://sajdhaj.advitsoftware.com",
   "https://www.sajdhaj.advitsoftware.com",
   "http://localhost:5173",
-  "*"
 ];
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      // allow postman/server requests
+      // allow postman/mobile apps
       if (!origin) {
         return callback(null, true);
       }
@@ -30,7 +29,14 @@ app.use(
 
     credentials: true,
 
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    methods: [
+      "GET",
+      "POST",
+      "PUT",
+      "PATCH",
+      "DELETE",
+      "OPTIONS",
+    ],
 
     allowedHeaders: [
       "Content-Type",
@@ -39,7 +45,7 @@ app.use(
   })
 );
 
-app.options("*", cors());
+app.options(/.*/, cors());
 app.use(express.json());
 app.use(passport.initialize());
 
