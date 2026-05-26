@@ -62,49 +62,6 @@ exports.getSubCategoriesByCategory = async (req, res) => {
   }
 }
 
-// exports.updateSubCategory = async (req, res) => {
-//   try {
-//     const { id } = req.params
-//     const { name } = req.body
-
-//     const subCategory = await SubCategory.findByPk(id)
-//     if (!subCategory) {
-//       return res.status(404).json({ message: "Subcategory not found" })
-//     }
-
-//     subCategory.name = name || subCategory.name
-//     await subCategory.save()
-
-//     res.status(200).json({
-//       success: true,
-//       message: "Subcategory updated",
-//       data: subCategory
-//     })
-//   } catch (error) {
-//     res.status(500).json({ message: error.message })
-//   }
-// }
-
-// exports.deleteSubCategory = async (req, res) => {
-//   try {
-//     const { id } = req.params
-
-//     const subCategory = await SubCategory.findByPk(id)
-//     if (!subCategory) {
-//       return res.status(404).json({ message: "Subcategory not found" })
-//     }
-
-//     subCategory.isActive = false
-//     await subCategory.save()
-
-//     res.status(200).json({
-//       success: true,
-//       message: "Subcategory deleted"
-//     })
-//   } catch (error) {
-//     res.status(500).json({ message: error.message })
-//   }
-// }
 
 exports.updateSubCategory = async (req, res) => {
   const t = await sequelize.transaction();
@@ -127,10 +84,10 @@ exports.updateSubCategory = async (req, res) => {
     // 2. Cascade Logic: If isActive status is provided in the request
     if (isActive !== undefined) {
       // Update all ProductCategories linked to this SubCategory
-      await ProductCategory.update(
-        { isActive: isActive },
-        { where: { subCategoryId: id }, transaction: t }
-      );
+      // await ProductCategory.update(
+      //   { isActive: isActive },
+      //   { where: { subCategoryId: id }, transaction: t }
+      // );
 
       // Update all Products linked to this SubCategory
       await Product.update(
@@ -172,11 +129,11 @@ exports.deleteSubCategory = async (req, res) => {
     // 1. Deactivate SubCategory
     await subCategory.update({ isActive: false }, { transaction: t });
 
-    // 2. Deactivate all ProductCategories under this SubCategory
-    await ProductCategory.update(
-      { isActive: false },
-      { where: { subCategoryId: id }, transaction: t }
-    );
+    // // 2. Deactivate all ProductCategories under this SubCategory
+    // await ProductCategory.update(
+    //   { isActive: false },
+    //   { where: { subCategoryId: id }, transaction: t }
+    // );
 
     // 3. Deactivate all Products under this SubCategory
     await Product.update(

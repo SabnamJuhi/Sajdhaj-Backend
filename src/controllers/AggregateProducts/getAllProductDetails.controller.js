@@ -1,4 +1,3 @@
-
 const sequelize = require("../../config/db");
 
 const Product = require("../../models/products/product.model");
@@ -17,7 +16,7 @@ const Wishlist = require("../../models/wishlist.model");
 const {
   Category,
   SubCategory,
-  ProductCategory,
+  // ProductCategory,
 } = require("../../models");
 const {
   getPaginationOptions,
@@ -27,17 +26,30 @@ const {
 exports.getAllProductsDetails = async (req, res) => {
   try {
     const userId = req.user?.id;
-     const paginationOptions = getPaginationOptions(req.query);
-      /* ---------------- DYNAMIC WHERE ---------------- */
+    const paginationOptions = getPaginationOptions(req.query);
+    /* ---------------- DYNAMIC WHERE ---------------- */
+    // const productWhere = {};
+
+    // if (req.query.isActive !== undefined) {
+    //   productWhere.isActive = req.query.isActive === "true";
+    // }
     const productWhere = {};
 
     if (req.query.isActive !== undefined) {
       productWhere.isActive = req.query.isActive === "true";
     }
 
+    if (req.query.categoryId) {
+      productWhere.categoryId = req.query.categoryId;
+    }
+
+    if (req.query.subCategoryId) {
+      productWhere.subCategoryId = req.query.subCategoryId;
+    }
+
     /* ---------------- GET PRODUCTS ---------------- */
     const products = await Product.findAndCountAll({
-       where: productWhere,
+      where: productWhere,
       attributes: [
         "id",
         "sku",
@@ -72,8 +84,16 @@ exports.getAllProductsDetails = async (req, res) => {
             "isActive",
           ],
           include: [
-            { model: VariantImage, as: "images", attributes: ["id", "imageUrl"] },
-            { model: VariantSize, as: "sizes", attributes: ["id", "size", "stock", "chest"] },
+            {
+              model: VariantImage,
+              as: "images",
+              attributes: ["id", "imageUrl"],
+            },
+            {
+              model: VariantSize,
+              as: "sizes",
+              attributes: ["id", "size", "stock", "chest"],
+            },
           ],
         },
 
@@ -99,15 +119,20 @@ exports.getAllProductsDetails = async (req, res) => {
                 {
                   model: OfferSub,
                   as: "subOffers",
-                  attributes: ["id", "discountType", "discountValue", "maxDiscount"],
+                  attributes: [
+                    "id",
+                    "discountType",
+                    "discountValue",
+                    "maxDiscount",
+                  ],
                 },
               ],
             },
           ],
         },
       ],
-        distinct: true, 
-        order: [["createdAt", "DESC"]],
+      distinct: true,
+      order: [["createdAt", "DESC"]],
       ...paginationOptions,
     });
 
@@ -150,7 +175,7 @@ exports.getAllProductsDetails = async (req, res) => {
 
         const subOffer =
           offer.offerDetails?.subOffers?.find(
-            (s) => s.id === offer.subOfferId
+            (s) => s.id === offer.subOfferId,
           ) || offer.offerDetails?.subOffers?.[0];
 
         if (subOffer) {
@@ -202,14 +227,13 @@ exports.getAllProductsDetails = async (req, res) => {
     const response = formatPagination(
       { count: products.count, rows: finalProducts },
       paginationOptions.currentPage,
-      paginationOptions.limit
+      paginationOptions.limit,
     );
 
     return res.json({
       success: true,
       ...response,
     });
-
   } catch (error) {
     console.error("GET ALL PRODUCTS ERROR:", error);
 

@@ -30,13 +30,13 @@ exports.getProductFilters = async (req, res) => {
           model: SubCategory,
           as: "subcategories",
           attributes: ["id", "name"],
-          include: [
-            {
-              model: ProductCategory,
-              as: "productCategories",
-              attributes: ["id", "name"],
-            },
-          ],
+          // include: [
+          //   {
+          //     model: ProductCategory,
+          //     as: "productCategories",
+          //     attributes: ["id", "name"],
+          //   },
+          // ],
         },
       ],
     });
