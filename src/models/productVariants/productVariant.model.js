@@ -26,11 +26,11 @@ ProductVariant.init(
     },
     colorCode: {
       type: DataTypes.STRING,
-      allowNull: false
+      allowNull: true
     },
-    colorSwatch: {
-      type: DataTypes.STRING
-    },
+    // colorSwatch: {
+    //   type: DataTypes.STRING
+    // },
     totalStock: {
       type: DataTypes.INTEGER,
       defaultValue: 0

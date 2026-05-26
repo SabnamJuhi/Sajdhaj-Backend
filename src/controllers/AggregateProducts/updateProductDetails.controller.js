@@ -1,3 +1,6 @@
+const fs = require("fs");
+const path = require("path");
+const QRCode = require("qrcode");
 const sequelize = require("../../config/db");
 
 const Product = require("../../models/products/product.model");
@@ -7,8 +10,6 @@ const ProductVariant = require("../../models/productVariants/productVariant.mode
 const VariantImage = require("../../models/productVariants/variantImage.model");
 const VariantSize = require("../../models/productVariants/variantSize.model");
 const { OfferApplicableProduct } = require("../../models");
-const fs = require("fs");
-const path = require("path");
 
 // const cloudinary = require("../../config/cloudinary");
 
@@ -28,6 +29,7 @@ exports.updateProductDetails = async (req, res) => {
     const { id: productId } = req.params;
     const {
       title,
+      productCode,
       brandName,
       categoryId,
       subCategoryId,
@@ -38,13 +40,67 @@ exports.updateProductDetails = async (req, res) => {
       specs,
       variants,
       appliedOffers,
-      gstRate,
+      // gstRate,
+      isActive,
     } = req.body;
 
     /* ---------------- FIND PRODUCT ---------------- */
     const product = await Product.findByPk(productId, { transaction: t });
     if (!product) throw new Error("Product not found");
 
+    /* ---------------- PRODUCT CODE CHECK ---------------- */
+    if (productCode) {
+      const existing = await Product.findOne({
+        where: {
+          productCode,
+          id: {
+            [sequelize.Sequelize.Op.ne]: productId,
+          },
+        },
+      });
+
+      if (existing) {
+        throw new Error("Product code already exists");
+      }
+    }
+
+    /* ---------------- QR GENERATION ---------------- */
+
+    let qrCodePath = product.qrCode;
+
+    if (productCode && productCode !== product.productCode) {
+      // delete old qr
+      if (product.qrCode) {
+        const oldQrPath = path.join(__dirname, "../../..", product.qrCode);
+
+        if (fs.existsSync(oldQrPath)) {
+          fs.unlinkSync(oldQrPath);
+        }
+      }
+
+      // create folder
+      const qrFolder = path.join(__dirname, "../../../uploads/qrcodes");
+
+      if (!fs.existsSync(qrFolder)) {
+        fs.mkdirSync(qrFolder, { recursive: true });
+      }
+
+      // safe filename
+      const safeFileName = productCode.replace(/[\/\\]/g, "-");
+
+      const qrFileName = `${safeFileName}.png`;
+
+      const qrAbsolutePath = path.join(qrFolder, qrFileName);
+
+      // QR CONTENT
+      const qrData = JSON.stringify({
+        productCode,
+      });
+
+      await QRCode.toFile(qrAbsolutePath, qrData);
+
+      qrCodePath = `/uploads/qrcodes/${qrFileName}`;
+    }
     /* ---------------- UPDATE CORE ---------------- */
     await product.update(
       {
@@ -56,8 +112,10 @@ exports.updateProductDetails = async (req, res) => {
         ...(categoryId !== undefined && { categoryId }),
         ...(subCategoryId !== undefined && { subCategoryId }),
         // ...(productCategoryId !== undefined && { productCategoryId }),
-        ...(gstRate !== undefined && {gstRate }),
-        // ...(isActive !== undefined && { isActive }),
+        ...(productCode !== undefined && { productCode }),
+        // ...(gstRate !== undefined && {gstRate }),
+        ...(isActive !== undefined && { isActive }),
+        qrCode: qrCodePath,
       },
       { transaction: t },
     );
@@ -280,7 +338,6 @@ exports.updateProductDetails = async (req, res) => {
       });
     }
 
-    
     /* ---------------- UPDATE OFFERS ---------------- */
     if (appliedOffers) {
       const parsedAppliedOffers = parseJSON(appliedOffers, "appliedOffers");

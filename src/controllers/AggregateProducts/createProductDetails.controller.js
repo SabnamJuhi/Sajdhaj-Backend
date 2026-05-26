@@ -1,3 +1,6 @@
+const fs = require("fs");
+const path = require("path");
+const QRCode = require("qrcode");
 const sequelize = require("../../config/db");
 
 const Product = require("../../models/products/product.model");
@@ -29,6 +32,7 @@ exports.createProduct = async (req, res) => {
       brandName,
       categoryId,
       subCategoryId,
+      productCode,
       // productCategoryId,
       description,
       badge,
@@ -36,14 +40,13 @@ exports.createProduct = async (req, res) => {
       specs,
       variants,
       appliedOffers,
-      gstRate,
     } = req.body;
 
-    if (!title || !categoryId || !subCategoryId ) {
+    if (!title || !categoryId || !subCategoryId) {
       throw new Error("Missing required product fields");
     }
-//nbhg
-    const parsedPrice = parseJSON(price, "price")
+    //nbhg
+    const parsedPrice = parseJSON(price, "price");
     const parsedSpecs = parseJSON(specs, "specs");
     const parsedVariants = parseJSON(variants, "variants");
     const parsedAppliedOffers = appliedOffers
@@ -81,21 +84,48 @@ exports.createProduct = async (req, res) => {
     //   throw new Error("Invalid GST rate");
     // }
     /* ---------------- CREATE PRODUCT ---------------- */
+
+    if (!productCode) {
+      throw new Error("Product code is required");
+    }
+    const existingCode = await Product.findOne({
+      where: { productCode },
+    });
+
+    if (existingCode) {
+      throw new Error("Product code already exists");
+    }
+
+    //QR Code generate
+    const qrFolder = path.join(__dirname, "../../../uploads/qrcodes");
+
+    if (!fs.existsSync(qrFolder)) {
+      fs.mkdirSync(qrFolder, { recursive: true });
+    }
+
+    const safeFileName = productCode.replace(/[\/\\]/g, "-");
+
+    const qrFileName = `${safeFileName}.png`;
+
+    const qrAbsolutePath = path.join(qrFolder, qrFileName);
+
+    await QRCode.toFile(qrAbsolutePath, productCode);
+
     const product = await Product.create(
       {
         title,
+        productCode,
         brandName,
         categoryId: Number(categoryId),
         subCategoryId: Number(subCategoryId),
         // productCategoryId: Number(productCategoryId),
         description,
         badge,
-        gstRate,
+        qrCode: `/uploads/qrcodes/${qrFileName}`,
       },
       { transaction: t },
     );
 
-    
     const calculatedPrice = calculatePrice({
       mrp: parsedPrice.mrp,
       sellingPrice: parsedPrice.sellingPrice,

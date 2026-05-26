@@ -51,10 +51,14 @@ Product.init(
     badge: {
       type: DataTypes.STRING,
     },
-    gstRate: {
-      type: DataTypes.DECIMAL(5, 2), // 5.00, 12.00, 18.00, 28.00
+    productCode: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      unique: true,
+    },
+    qrCode: {
+      type: DataTypes.STRING,
       allowNull: true,
-      defaultValue: 0,
     },
     isActive: {
       type: DataTypes.BOOLEAN,
