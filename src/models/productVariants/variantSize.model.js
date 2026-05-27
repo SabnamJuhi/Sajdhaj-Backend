@@ -15,13 +15,12 @@ VariantSize.init(
       type: DataTypes.INTEGER,
       allowNull: false
     },
-    size: {
-      type: DataTypes.STRING,
-      allowNull: false
+   
+    sizeMasterId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
     },
-    // chest: {
-    //   type: DataTypes.STRING
-    // },
+  
     stock: {
       type: DataTypes.INTEGER,
       defaultValue: 0

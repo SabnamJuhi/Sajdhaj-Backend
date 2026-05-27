@@ -1,3 +1,249 @@
+// const sequelize = require("../../config/db");
+
+// const Product = require("../../models/products/product.model");
+// const ProductPrice = require("../../models/products/price.model");
+// const ProductSpec = require("../../models/products/productSpec.model");
+// const ProductVariant = require("../../models/productVariants/productVariant.model");
+// const VariantImage = require("../../models/productVariants/variantImage.model");
+// const VariantSize = require("../../models/productVariants/variantSize.model");
+
+// const Offer = require("../../models/offers/offer.model");
+// const OfferSub = require("../../models/offers/offerSub.model");
+// const OfferApplicableProduct = require("../../models/offers/offerApplicableProduct.model");
+
+// const Wishlist = require("../../models/wishlist.model");
+
+// const {
+//   Category,
+//   SubCategory,
+//   // ProductCategory,
+// } = require("../../models");
+// const {
+//   getPaginationOptions,
+//   formatPagination,
+// } = require("../../utils/paginate");
+
+// exports.getAllProductsDetails = async (req, res) => {
+//   try {
+//     const userId = req.user?.id;
+//     const paginationOptions = getPaginationOptions(req.query);
+//     /* ---------------- DYNAMIC WHERE ---------------- */
+//     // const productWhere = {};
+
+//     // if (req.query.isActive !== undefined) {
+//     //   productWhere.isActive = req.query.isActive === "true";
+//     // }
+//     const productWhere = {};
+
+//     if (req.query.isActive !== undefined) {
+//       productWhere.isActive = req.query.isActive === "true";
+//     }
+
+//     if (req.query.categoryId) {
+//       productWhere.categoryId = req.query.categoryId;
+//     }
+
+//     if (req.query.subCategoryId) {
+//       productWhere.subCategoryId = req.query.subCategoryId;
+//     }
+
+//     /* ---------------- GET PRODUCTS ---------------- */
+//     const products = await Product.findAndCountAll({
+//       where: productWhere,
+//       attributes: [
+//         "id",
+//         "sku",
+//         "title",
+//         "description",
+//         "brandName",
+//         "badge",
+//         // "gstRate",
+//         "isActive",
+//         "createdAt",
+//       ],
+
+//       include: [
+//         { model: Category, as: "Category", attributes: ["id", "name"] },
+//         { model: SubCategory, as: "SubCategory", attributes: ["id", "name"] },
+//         // { model: ProductCategory, as: "ProductCategory", attributes: ["id", "name"] },
+
+//         { model: ProductPrice, as: "price" },
+//         { model: ProductSpec, as: "specs" },
+
+//         {
+//           model: ProductVariant,
+//           as: "variants",
+//           attributes: [
+//             "id",
+//             "variantCode",
+//             "colorName",
+//             "colorCode",
+//             // "colorSwatch",
+//             "totalStock",
+//             "stockStatus",
+//             "isActive",
+//           ],
+//           include: [
+//             {
+//               model: VariantImage,
+//               as: "images",
+//               attributes: ["id", "imageUrl"],
+//             },
+//             {
+//               model: VariantSize,
+//               as: "sizes",
+//               attributes: ["id", "size", "stock",],
+//             },
+//           ],
+//         },
+
+//         {
+//           model: OfferApplicableProduct,
+//           as: "offerApplicableProducts",
+//           attributes: ["id", "offerId", "subOfferId"],
+//           include: [
+//             {
+//               model: Offer,
+//               as: "offerDetails",
+//               attributes: [
+//                 "id",
+//                 "offerCode",
+//                 "title",
+//                 "festival",
+//                 "description",
+//                 "startDate",
+//                 "endDate",
+//                 "isActive",
+//               ],
+//               include: [
+//                 {
+//                   model: OfferSub,
+//                   as: "subOffers",
+//                   attributes: [
+//                     "id",
+//                     "discountType",
+//                     "discountValue",
+//                     "maxDiscount",
+//                   ],
+//                 },
+//               ],
+//             },
+//           ],
+//         },
+//       ],
+//       distinct: true,
+//       order: [["createdAt", "DESC"]],
+//       ...paginationOptions,
+//     });
+
+//     /* ---------------- WISHLIST MAP ---------------- */
+//     let wishlistedMap = {};
+
+//     if (userId) {
+//       const wishlist = await Wishlist.findAll({
+//         where: { userId },
+//         attributes: ["productId", "variantId"],
+//       });
+
+//       wishlist.forEach((w) => {
+//         if (!wishlistedMap[w.productId]) {
+//           wishlistedMap[w.productId] = [];
+//         }
+//         wishlistedMap[w.productId].push(w.variantId);
+//       });
+//     }
+
+//     /* ---------------- FINAL PRODUCT RESPONSE ---------------- */
+
+//     const finalProducts = products.rows.map((p) => {
+//       const product = p.toJSON();
+
+//       const mrp = product.price?.mrp || 0;
+//       const sellingPrice = product.price?.sellingPrice || 0;
+//       const productDiscount = product.price?.discountPercentage || 0;
+
+//       let offerDiscountPercent = 0;
+//       let maxDiscount = 0;
+//       let discountAmount = 0;
+//       let finalPrice = sellingPrice;
+//       let offerCode = null;
+
+//       if (product.offerApplicableProducts?.length) {
+//         const offer = product.offerApplicableProducts[0];
+
+//         offerCode = offer.offerDetails?.offerCode;
+
+//         const subOffer =
+//           offer.offerDetails?.subOffers?.find(
+//             (s) => s.id === offer.subOfferId,
+//           ) || offer.offerDetails?.subOffers?.[0];
+
+//         if (subOffer) {
+//           offerDiscountPercent = subOffer.discountValue;
+//           maxDiscount = subOffer.maxDiscount;
+
+//           if (subOffer.discountType === "PERCENTAGE") {
+//             discountAmount = (sellingPrice * offerDiscountPercent) / 100;
+
+//             if (maxDiscount && discountAmount > maxDiscount) {
+//               discountAmount = maxDiscount;
+//             }
+//           }
+
+//           if (subOffer.discountType === "FLAT") {
+//             discountAmount = subOffer.discountValue;
+//           }
+
+//           finalPrice = sellingPrice - discountAmount;
+//         }
+//       }
+
+//       const productWishlisted = !!wishlistedMap[p.id];
+
+//       return {
+//         ...product,
+
+//         pricing: {
+//           mrp,
+//           sellingPrice,
+//           productDiscountPercent: productDiscount,
+
+//           offerCode,
+
+//           offerDiscountPercent,
+//           maxDiscount,
+
+//           discountAmount,
+//           youSave: discountAmount,
+
+//           finalPrice,
+//         },
+
+//         isWishlisted: productWishlisted,
+//         wishlistedVariants: wishlistedMap[p.id] || [],
+//       };
+//     });
+
+//     const response = formatPagination(
+//       { count: products.count, rows: finalProducts },
+//       paginationOptions.currentPage,
+//       paginationOptions.limit,
+//     );
+
+//     return res.json({
+//       success: true,
+//       ...response,
+//     });
+//   } catch (error) {
+//     console.error("GET ALL PRODUCTS ERROR:", error);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+
 const sequelize = require("../../config/db");
 
 const Product = require("../../models/products/product.model");
@@ -6,6 +252,7 @@ const ProductSpec = require("../../models/products/productSpec.model");
 const ProductVariant = require("../../models/productVariants/productVariant.model");
 const VariantImage = require("../../models/productVariants/variantImage.model");
 const VariantSize = require("../../models/productVariants/variantSize.model");
+const SizeMaster = require("../../models/products/sizeMaster.model");
 
 const Offer = require("../../models/offers/offer.model");
 const OfferSub = require("../../models/offers/offerSub.model");
@@ -54,6 +301,8 @@ exports.getAllProductsDetails = async (req, res) => {
         "id",
         "sku",
         "title",
+        "productType",
+        "productCode",
         "description",
         "brandName",
         "badge",
@@ -92,7 +341,14 @@ exports.getAllProductsDetails = async (req, res) => {
             {
               model: VariantSize,
               as: "sizes",
-              attributes: ["id", "size", "stock",],
+              attributes: ["id", "sizeMasterId", "stock"],
+              include: [
+                {
+                  model: SizeMaster,
+                  as: "sizeDetails",
+                  attributes: ["id", "name", "sortOrder"],
+                },
+              ],
             },
           ],
         },
@@ -200,8 +456,51 @@ exports.getAllProductsDetails = async (req, res) => {
 
       const productWishlisted = !!wishlistedMap[p.id];
 
+      /* ==================================================
+     MODIFY SIZES FOR CUSTOMIZED PRODUCT
+  ================================================== */
+
+      const updatedVariants = product.variants.map((variant) => {
+        let updatedSizes = [];
+
+        // READYMADE
+        if (product.productType === "READYMADE") {
+          updatedSizes = variant.sizes.map((size) => ({
+            id: size.id,
+            sizeMasterId: size.sizeMasterId,
+
+            sizeName: size.sizeMaster?.name,
+
+            stock: size.stock,
+
+            inStock: size.stock > 0,
+          }));
+        }
+
+        // CUSTOMIZED
+        if (product.productType === "CUSTOMIZED") {
+          updatedSizes = variant.sizes.map((size) => ({
+            id: size.id,
+            sizeMasterId: size.sizeMasterId,
+
+            sizeName: size.sizeMaster?.name,
+
+            stock: 1,
+
+            inStock: true,
+          }));
+        }
+
+        return {
+          ...variant,
+          sizes: updatedSizes,
+        };
+      });
+
       return {
         ...product,
+
+        variants: updatedVariants,
 
         pricing: {
           mrp,
@@ -220,6 +519,7 @@ exports.getAllProductsDetails = async (req, res) => {
         },
 
         isWishlisted: productWishlisted,
+
         wishlistedVariants: wishlistedMap[p.id] || [],
       };
     });

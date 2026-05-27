@@ -22,7 +22,11 @@ Product.init(
         return `${categoryCode}-${subCode}-${prodCatCode}-${paddedId}`;
       },
     },
-
+    productType: {
+      type: DataTypes.ENUM("READYMADE", "CUSTOMIZED"),
+      allowNull: false,
+      defaultValue: "READYMADE",
+    },
     title: {
       type: DataTypes.STRING,
       allowNull: false,

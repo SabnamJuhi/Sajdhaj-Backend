@@ -37,7 +37,7 @@ ProductVariant.init(
     },
     stockStatus: {
       type: DataTypes.STRING,
-      defaultValue: "In Stock"
+      defaultValue: "Out of Stock"
     },
     isActive: {
       type: DataTypes.BOOLEAN,

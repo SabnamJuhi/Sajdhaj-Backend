@@ -72,6 +72,7 @@ app.use("/api/offers", require("./routes/offers/offer.routes"))
 app.use("/api/coupons", require("./routes/offers/coupon.routes"));
 
 app.use("/api/aggregate", require("./routes/products/product.Agreegate.route"))
+app.use("/api/sizes", require("./routes/products/sizeMaster.routes"))
 
 app.use("/api/cart", require("./routes/order/cart.routes"))
 app.use("/api/order", require("./routes/order/order.routes"))

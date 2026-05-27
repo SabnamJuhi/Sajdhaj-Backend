@@ -13,6 +13,7 @@ const ProductReview = require("./products/productReview.model")
 const ProductSpec = require("./products/productSpec.model")
 const ProductPrice = require("./products/price.model")
 
+
 // Variants
 const ProductVariant = require("./productVariants/productVariant.model")
 const VariantImage = require("./productVariants/variantImage.model")
@@ -40,6 +41,7 @@ const DeliveryBoy = require("./orders/deliveryBoy.model")
 const FeaturedCategory = require("./featuredCategories/featured_categories.model")
 const OfferImage = require("./offers/offerImage.model")
 const SubOfferImage = require("./offers/subOfferImage.model")
+const SizeMaster = require("./products/sizeMaster.model")
 
 
 
@@ -94,6 +96,17 @@ VariantImage.belongsTo(ProductVariant, { foreignKey: "variantId" });
 
 ProductVariant.hasMany(VariantSize, { foreignKey: "variantId", as: "sizes" });
 VariantSize.belongsTo(ProductVariant, { foreignKey: "variantId" });
+
+// ================= SIZE MASTER RELATIONS =================
+
+// One SizeMaster can be used in many VariantSizes
+SizeMaster.hasMany(VariantSize, {foreignKey: "sizeMasterId",as: "variantSizes",});
+
+// Each VariantSize belongs to one SizeMaster
+VariantSize.belongsTo(SizeMaster, {
+  foreignKey: "sizeMasterId",
+  as: "sizeDetails",
+});
 
 
 //offer Relations
@@ -212,5 +225,6 @@ module.exports = {
   OrderItem, 
   OrderAddress,
   Wishlist,
-  FeaturedCategory
+  FeaturedCategory,
+  SizeMaster
 }
