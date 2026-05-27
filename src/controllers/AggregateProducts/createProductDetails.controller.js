@@ -193,7 +193,7 @@ exports.createProduct = async (req, res) => {
             variantId: variant.id,
             size: s.size,
             stock: s.stock,
-            chest: s.chest ?? null,
+            // chest: s.chest ?? null,
           })),
           { transaction: t },
         );

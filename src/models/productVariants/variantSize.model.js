@@ -19,9 +19,9 @@ VariantSize.init(
       type: DataTypes.STRING,
       allowNull: false
     },
-    chest: {
-      type: DataTypes.STRING
-    },
+    // chest: {
+    //   type: DataTypes.STRING
+    // },
     stock: {
       type: DataTypes.INTEGER,
       defaultValue: 0

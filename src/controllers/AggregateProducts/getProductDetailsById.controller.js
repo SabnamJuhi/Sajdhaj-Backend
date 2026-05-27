@@ -73,7 +73,7 @@ exports.getProductById = async (req, res) => {
             {
               model: VariantSize,
               as: "sizes",
-              attributes: ["id", "size", "stock", "chest"],
+              attributes: ["id", "size", "stock"],
             },
           ],
         },
