@@ -42,6 +42,7 @@ const FeaturedCategory = require("./featuredCategories/featured_categories.model
 const OfferImage = require("./offers/offerImage.model")
 const SubOfferImage = require("./offers/subOfferImage.model")
 const SizeMaster = require("./products/sizeMaster.model")
+const Banner = require("./banner/banner.model")
 
 
 
@@ -199,6 +200,15 @@ Wishlist.belongsTo(ProductVariant, { foreignKey: "variantId" });
 Category.hasMany(FeaturedCategory, {foreignKey: "categoryId", as: "featuredEntries"});
 FeaturedCategory.belongsTo(Category, {foreignKey: "categoryId", as: "category"});
 
+Banner.belongsTo(Category, {
+  foreignKey: "categoryId",
+  as: "category",
+});
+Category.hasMany(Banner, {
+  foreignKey: "categoryId",
+  as: "banners",
+});
+
 module.exports = {
   sequelize,
   Category,
@@ -226,5 +236,7 @@ module.exports = {
   OrderAddress,
   Wishlist,
   FeaturedCategory,
-  SizeMaster
+  SizeMaster,
+  Banner
+
 }

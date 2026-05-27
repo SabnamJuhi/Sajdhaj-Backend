@@ -9,9 +9,10 @@ const {
   getAllBanners,
   updateBanner,
   deleteBanner,
-  checkBannerColumns,
   restoreBanner,
   softDeleteBanner,
+  getHomepageBanners,
+  getCategorySidebarBanners,
 } = require("../../controllers/banner/banner.controller");
 const adminAuthMiddleware = require("../../middleware/admin.auth.middleware");
 
@@ -24,5 +25,13 @@ router.delete("/:id", adminAuthMiddleware, deleteBanner);
 // Soft delete and restore routes
 router.patch("/:id/soft-delete",  softDeleteBanner); // Set isActive = false
 router.patch("/:id/restore",  restoreBanner); // Set isActive = true
+
+/* CUSTOMER */
+router.get("/homepage",getHomepageBanners);
+
+router.get(
+  "/sidebar/:categoryId",
+  getCategorySidebarBanners
+);
 
 module.exports = router;
