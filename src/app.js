@@ -10,6 +10,7 @@ const allowedOrigins = [
   "https://sajdhaj.advitsoftware.com",
   "https://www.sajdhaj.advitsoftware.com",
   "http://localhost:5173",
+  "https://sajadhdev1.netlify.app"
 ];
 
 app.use(
