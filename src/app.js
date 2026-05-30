@@ -52,15 +52,7 @@ app.use(passport.initialize());
 
 
 app.use("/uploads",  
-  cors({
-    origin: [
-      "http://localhost:5173",
-      "https://sajdhaj.advitsoftware.com",
-      "https://www.sajdhaj.advitsoftware.com",
-      "https://sajadhdev1.netlify.app",
-    ],
-    credentials: true,
-  }),
+  cors(),
   express.static(path.join(__dirname, "../uploads")));
 // app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
