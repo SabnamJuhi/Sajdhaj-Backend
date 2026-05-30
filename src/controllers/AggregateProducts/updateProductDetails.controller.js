@@ -1,3 +1,402 @@
+// const fs = require("fs");
+// const path = require("path");
+// const QRCode = require("qrcode");
+// const sequelize = require("../../config/db");
+
+// const Product = require("../../models/products/product.model");
+// const ProductPrice = require("../../models/products/price.model");
+// const ProductSpec = require("../../models/products/productSpec.model");
+// const ProductVariant = require("../../models/productVariants/productVariant.model");
+// const VariantImage = require("../../models/productVariants/variantImage.model");
+// const VariantSize = require("../../models/productVariants/variantSize.model");
+// const { OfferApplicableProduct } = require("../../models");
+
+// // const cloudinary = require("../../config/cloudinary");
+
+// /* ---------------- SAFE JSON PARSER ---------------- */
+// const parseJSON = (data, field) => {
+//   try {
+//     return typeof data === "string" ? JSON.parse(data) : data;
+//   } catch {
+//     throw new Error(`Invalid JSON in "${field}"`);
+//   }
+// };
+
+// exports.updateProductDetails = async (req, res) => {
+//   const t = await sequelize.transaction();
+
+//   try {
+//     const { id: productId } = req.params;
+//     const {
+//       title,
+//       productCode,
+//       brandName,
+//       categoryId,
+//       subCategoryId,
+//       // productCategoryId,
+//       description,
+//       badge,
+//       price,
+//       specs,
+//       variants,
+//       appliedOffers,
+//       // gstRate,
+//       isActive,
+//     } = req.body;
+
+//     /* ---------------- FIND PRODUCT ---------------- */
+//     const product = await Product.findByPk(productId, { transaction: t });
+//     if (!product) throw new Error("Product not found");
+
+//     /* ---------------- PRODUCT CODE CHECK ---------------- */
+//     if (productCode) {
+//       const existing = await Product.findOne({
+//         where: {
+//           productCode,
+//           id: {
+//             [sequelize.Sequelize.Op.ne]: productId,
+//           },
+//         },
+//       });
+
+//       if (existing) {
+//         throw new Error("Product code already exists");
+//       }
+//     }
+
+//     /* ---------------- QR GENERATION ---------------- */
+
+//     let qrCodePath = product.qrCode;
+
+//     if (productCode && productCode !== product.productCode) {
+//       // delete old qr
+//       if (product.qrCode) {
+//         const oldQrPath = path.join(__dirname, "../../..", product.qrCode);
+
+//         if (fs.existsSync(oldQrPath)) {
+//           fs.unlinkSync(oldQrPath);
+//         }
+//       }
+
+//       // create folder
+//       const qrFolder = path.join(__dirname, "../../../uploads/qrcodes");
+
+//       if (!fs.existsSync(qrFolder)) {
+//         fs.mkdirSync(qrFolder, { recursive: true });
+//       }
+
+//       // safe filename
+//       const safeFileName = productCode.replace(/[\/\\]/g, "-");
+
+//       const qrFileName = `${safeFileName}.png`;
+
+//       const qrAbsolutePath = path.join(qrFolder, qrFileName);
+
+//       // QR CONTENT
+//       const qrData = JSON.stringify({
+//         productCode,
+//       });
+
+//       await QRCode.toFile(qrAbsolutePath, qrData);
+
+//       qrCodePath = `/uploads/qrcodes/${qrFileName}`;
+//     }
+//     /* ---------------- UPDATE CORE ---------------- */
+//     await product.update(
+//       {
+//         ...(title !== undefined && { title }),
+//         ...(description !== undefined && { description }),
+//         ...(badge !== undefined && { badge }),
+//         ...(brandName !== undefined && { brandName }),
+//         // ✅ ADD THESE
+//         ...(categoryId !== undefined && { categoryId }),
+//         ...(subCategoryId !== undefined && { subCategoryId }),
+//         // ...(productCategoryId !== undefined && { productCategoryId }),
+//         ...(productCode !== undefined && { productCode }),
+//         // ...(gstRate !== undefined && {gstRate }),
+//         ...(isActive !== undefined && { isActive }),
+//         qrCode: qrCodePath,
+//       },
+//       { transaction: t },
+//     );
+
+//     /* ---------------- PRICE UPSERT ---------------- */
+//     if (price) {
+//       const p = parseJSON(price, "price");
+
+//       const mrp = Number(p.mrp);
+//       const sellingPrice = Number(p.sellingPrice ?? mrp);
+
+//       await ProductPrice.upsert(
+//         {
+//           productId,
+//           mrp,
+//           sellingPrice,
+//           discountPercentage:
+//             mrp > sellingPrice
+//               ? Math.round(((mrp - sellingPrice) / mrp) * 100)
+//               : 0,
+//           currency: p.currency || "INR",
+//         },
+//         { transaction: t },
+//       );
+//     }
+
+//     /* ---------------- SPECS REPLACE ---------------- */
+//     if (specs) {
+//       const parsedSpecs = parseJSON(specs, "specs");
+
+//       await ProductSpec.destroy({ where: { productId }, transaction: t });
+
+//       const rows = Object.keys(parsedSpecs).map((key) => ({
+//         productId,
+//         specKey: key,
+//         specValue: Array.isArray(parsedSpecs[key])
+//           ? parsedSpecs[key].join(", ")
+//           : parsedSpecs[key],
+//       }));
+
+//       if (rows.length) await ProductSpec.bulkCreate(rows, { transaction: t });
+//     }
+
+//     /* ================= MAP UPLOADED CLOUDINARY IMAGES ================= */
+//     const variantImagesMap = {};
+
+//     for (const file of req.files || []) {
+//       let match;
+
+//       // existing variant images
+//       match = file.fieldname.match(/^variantImages_id_(\d+)$/);
+//       if (match) {
+//         const key = `id_${match[1]}`;
+//         variantImagesMap[key] ??= [];
+//         const imagePath = `/uploads/products/${file.filename}`;
+//         variantImagesMap[key].push(imagePath);
+//         continue;
+//       }
+
+//       // new variant images
+//       match = file.fieldname.match(/^variantImages_tmp_(.+)$/);
+//       if (match) {
+//         const key = `tmp_${match[1]}`;
+//         variantImagesMap[key] ??= [];
+//         const imagePath = `/uploads/products/${file.filename}`;
+//         variantImagesMap[key].push(imagePath);
+//       }
+//     }
+
+//     /* ================= VARIANTS ================= */
+//     if (variants) {
+//       const parsedVariants = parseJSON(variants, "variants");
+
+//       const dbVariants = await ProductVariant.findAll({
+//         where: { productId },
+//         include: [{ model: VariantImage, as: "images" }],
+//         transaction: t,
+//       });
+
+//       const dbMap = new Map(dbVariants.map((v) => [v.id, v]));
+//       const incomingIds = new Set();
+
+//       for (const v of parsedVariants) {
+//         let variant;
+
+//         /* ---------- UPDATE EXISTING VARIANT ---------- */
+//         if (v.id) {
+//           if (!dbMap.has(v.id)) throw new Error(`Invalid variant id ${v.id}`);
+
+//           variant = dbMap.get(v.id);
+//           incomingIds.add(variant.id);
+
+//           await variant.update(
+//             {
+//               variantCode: v.variantCode,
+//               colorName: v.color.name,
+//               colorCode: v.color.code,
+//               colorSwatch: v.color.swatch ?? null,
+//               totalStock: v.totalStock,
+//               stockStatus: v.stockStatus,
+//               isActive: v.isActive,
+//             },
+//             { transaction: t },
+//           );
+
+//           /* ---------- REPLACE SIZES ---------- */
+//           if (Array.isArray(v.sizes)) {
+//             await VariantSize.destroy({
+//               where: { variantId: variant.id },
+//               transaction: t,
+//             });
+
+//             await VariantSize.bulkCreate(
+//               v.sizes.map((s) => ({
+//                 variantId: variant.id,
+//                 size: s.size,
+//                 stock: s.stock,
+//                 // chest: s.chest ?? null,
+//               })),
+//               { transaction: t },
+//             );
+//           }
+
+//           /* ---------- REPLACE IMAGES ---------- */
+//           const newImgs = variantImagesMap[`id_${variant.id}`] || [];
+
+//           if (newImgs.length > 0) {
+//             for (const img of variant.images) {
+//               const fullPath = path.join(__dirname, "../../", img.imageUrl);
+//               if (fs.existsSync(fullPath)) {
+//                 fs.unlinkSync(fullPath);
+//               }
+//             }
+
+//             await VariantImage.destroy({
+//               where: { variantId: variant.id },
+//               transaction: t,
+//             });
+
+//             await VariantImage.bulkCreate(
+//               newImgs.map((url) => ({
+//                 variantId: variant.id,
+//                 imageUrl: url,
+//               })),
+//               { transaction: t },
+//             );
+//           }
+//         } else {
+//           /* ---------- CREATE NEW VARIANT ---------- */
+//           if (!v.tempKey) throw new Error("tempKey required for new variant");
+
+//           variant = await ProductVariant.create(
+//             {
+//               productId,
+//               variantCode: v.variantCode,
+//               colorName: v.color.name,
+//               colorCode: v.color.code,
+//               colorSwatch: v.color.swatch ?? null,
+//               totalStock: v.totalStock || 0,
+//               stockStatus: v.stockStatus || "Out of Stock",
+//             },
+//             { transaction: t },
+//           );
+
+//           incomingIds.add(variant.id);
+
+//           /* sizes */
+//           if (Array.isArray(v.sizes)) {
+//             await VariantSize.bulkCreate(
+//               v.sizes.map((s) => ({
+//                 variantId: variant.id,
+//                 size: s.size,
+//                 stock: s.stock,
+//                 // chest: s.chest ?? null,
+//               })),
+//               { transaction: t },
+//             );
+//           }
+
+//           /* images */
+//           const imgs = variantImagesMap[`tmp_${v.tempKey}`] || [];
+//           if (imgs.length) {
+//             await VariantImage.bulkCreate(
+//               imgs.map((url) => ({
+//                 variantId: variant.id,
+//                 imageUrl: url,
+//               })),
+//               { transaction: t },
+//             );
+//           }
+//         }
+//       }
+
+//       /* ---------- DELETE REMOVED VARIANTS ---------- */
+//       const toDelete = dbVariants.filter((v) => !incomingIds.has(v.id));
+
+//       for (const v of toDelete) {
+//         // delete cloudinary images
+//         for (const img of v.images) {
+//           const fullPath = path.join(__dirname, "../../", img.imageUrl);
+//           if (fs.existsSync(fullPath)) {
+//             fs.unlinkSync(fullPath);
+//           }
+//         }
+//       }
+
+//       await VariantSize.destroy({
+//         where: { variantId: toDelete.map((v) => v.id) },
+//         transaction: t,
+//       });
+
+//       await VariantImage.destroy({
+//         where: { variantId: toDelete.map((v) => v.id) },
+//         transaction: t,
+//       });
+
+//       await ProductVariant.destroy({
+//         where: { id: toDelete.map((v) => v.id) },
+//         transaction: t,
+//       });
+//     }
+
+//     /* ---------------- UPDATE OFFERS ---------------- */
+//     if (appliedOffers) {
+//       const parsedAppliedOffers = parseJSON(appliedOffers, "appliedOffers");
+
+//       // Remove all existing mappings first
+//       await OfferApplicableProduct.destroy({
+//         where: { productId },
+//         transaction: t,
+//       });
+
+//       if (parsedAppliedOffers.length) {
+//         // keep only the latest subOffer per offer
+//         const uniqueOffersMap = new Map();
+
+//         for (const offer of parsedAppliedOffers) {
+//           uniqueOffersMap.set(offer.offerId, offer.subOfferId);
+//         }
+
+//         const rows = [];
+
+//         for (const [offerId, subOfferId] of uniqueOffersMap.entries()) {
+//           rows.push({
+//             productId,
+//             offerId,
+//             subOfferId,
+//           });
+//         }
+
+//         await OfferApplicableProduct.bulkCreate(rows, {
+//           transaction: t,
+//         });
+//       }
+//     }
+
+//     await t.commit();
+
+//     return res.json({
+//       success: true,
+//       message: "Product updated successfully",
+//     });
+//   } catch (error) {
+//     await t.rollback();
+//     console.error("UPDATE PRODUCT ERROR:", error);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+
+
+
+
+
+
+
+
+
 const fs = require("fs");
 const path = require("path");
 const QRCode = require("qrcode");
@@ -10,6 +409,7 @@ const ProductVariant = require("../../models/productVariants/productVariant.mode
 const VariantImage = require("../../models/productVariants/variantImage.model");
 const VariantSize = require("../../models/productVariants/variantSize.model");
 const { OfferApplicableProduct } = require("../../models");
+const { calculatePrice } = require("../../services/price.service");
 
 // const cloudinary = require("../../config/cloudinary");
 
@@ -24,12 +424,18 @@ const parseJSON = (data, field) => {
 
 exports.updateProductDetails = async (req, res) => {
   const t = await sequelize.transaction();
+  console.log("FILES COUNT:", req.files?.length);
+
+(req.files || []).forEach((f) => {
+  console.log(f.fieldname, f.filename);
+});
 
   try {
     const { id: productId } = req.params;
     const {
       title,
       productCode,
+      productType,
       brandName,
       categoryId,
       subCategoryId,
@@ -92,12 +498,13 @@ exports.updateProductDetails = async (req, res) => {
 
       const qrAbsolutePath = path.join(qrFolder, qrFileName);
 
-      // QR CONTENT
-      const qrData = JSON.stringify({
-        productCode,
-      });
+      // // QR CONTENT
+      // const qrData = JSON.stringify({
+      //   productCode,
+      // });
 
-      await QRCode.toFile(qrAbsolutePath, qrData);
+      // await QRCode.toFile(qrAbsolutePath, qrData);
+      await QRCode.toFile(qrAbsolutePath, productCode);
 
       qrCodePath = `/uploads/qrcodes/${qrFileName}`;
     }
@@ -108,12 +515,12 @@ exports.updateProductDetails = async (req, res) => {
         ...(description !== undefined && { description }),
         ...(badge !== undefined && { badge }),
         ...(brandName !== undefined && { brandName }),
-        // ✅ ADD THESE
-        ...(categoryId !== undefined && { categoryId }),
-        ...(subCategoryId !== undefined && { subCategoryId }),
-        // ...(productCategoryId !== undefined && { productCategoryId }),
+        ...(categoryId !== undefined && { categoryId: Number(categoryId) }),
+        ...(subCategoryId !== undefined && {
+          subCategoryId: Number(subCategoryId),
+        }),
+        ...(productType !== undefined && { productType }),
         ...(productCode !== undefined && { productCode }),
-        // ...(gstRate !== undefined && {gstRate }),
         ...(isActive !== undefined && { isActive }),
         qrCode: qrCodePath,
       },
@@ -122,21 +529,21 @@ exports.updateProductDetails = async (req, res) => {
 
     /* ---------------- PRICE UPSERT ---------------- */
     if (price) {
-      const p = parseJSON(price, "price");
+      const parsedPrice = parseJSON(price, "price");
 
-      const mrp = Number(p.mrp);
-      const sellingPrice = Number(p.sellingPrice ?? mrp);
+      const calculatedPrice = calculatePrice({
+        mrp: parsedPrice.mrp,
+        sellingPrice: parsedPrice.sellingPrice,
+        discountPercentage: parsedPrice.discountPercentage,
+      });
 
       await ProductPrice.upsert(
         {
           productId,
-          mrp,
-          sellingPrice,
-          discountPercentage:
-            mrp > sellingPrice
-              ? Math.round(((mrp - sellingPrice) / mrp) * 100)
-              : 0,
-          currency: p.currency || "INR",
+          mrp: calculatedPrice.mrp,
+          sellingPrice: calculatedPrice.sellingPrice,
+          discountPercentage: calculatedPrice.discountPercentage,
+          currency: parsedPrice.currency || "INR",
         },
         { transaction: t },
       );
@@ -159,7 +566,7 @@ exports.updateProductDetails = async (req, res) => {
       if (rows.length) await ProductSpec.bulkCreate(rows, { transaction: t });
     }
 
-    /* ================= MAP UPLOADED CLOUDINARY IMAGES ================= */
+    /* ================= MAP UPLOADED IMAGES ================= */
     const variantImagesMap = {};
 
     for (const file of req.files || []) {
@@ -174,6 +581,7 @@ exports.updateProductDetails = async (req, res) => {
         variantImagesMap[key].push(imagePath);
         continue;
       }
+      console.log("variantImagesMap:", variantImagesMap);
 
       // new variant images
       match = file.fieldname.match(/^variantImages_tmp_(.+)$/);
@@ -183,7 +591,9 @@ exports.updateProductDetails = async (req, res) => {
         const imagePath = `/uploads/products/${file.filename}`;
         variantImagesMap[key].push(imagePath);
       }
+      console.log("variantImagesMap:", variantImagesMap);
     }
+   
 
     /* ================= VARIANTS ================= */
     if (variants) {
@@ -213,9 +623,9 @@ exports.updateProductDetails = async (req, res) => {
               variantCode: v.variantCode,
               colorName: v.color.name,
               colorCode: v.color.code,
-              colorSwatch: v.color.swatch ?? null,
-              totalStock: v.totalStock,
-              stockStatus: v.stockStatus,
+              // colorSwatch: v.color.swatch ?? null,
+              // totalStock: v.totalStock,
+              // stockStatus: v.stockStatus,
               isActive: v.isActive,
             },
             { transaction: t },
@@ -228,15 +638,47 @@ exports.updateProductDetails = async (req, res) => {
               transaction: t,
             });
 
-            await VariantSize.bulkCreate(
-              v.sizes.map((s) => ({
+            let variantSizes = [];
+            const currentProductType = productType || product.productType;
+
+            if (currentProductType === "READYMADE") {
+              variantSizes = v.sizes.map((s) => ({
                 variantId: variant.id,
-                size: s.size,
-                stock: s.stock,
-                // chest: s.chest ?? null,
-              })),
-              { transaction: t },
-            );
+                sizeMasterId: s.sizeMasterId,
+                stock: s.stock || 0,
+              }));
+
+              const totalStock = variantSizes.reduce(
+                (sum, item) => sum + Number(item.stock),
+                0,
+              );
+
+              await variant.update(
+                {
+                  totalStock,
+                  stockStatus: totalStock > 0 ? "In Stock" : "Out of Stock",
+                },
+                { transaction: t },
+              );
+            } else if (currentProductType === "CUSTOMIZED") {
+              variantSizes = v.sizes.map((s) => ({
+                variantId: variant.id,
+                sizeMasterId: s.sizeMasterId,
+                stock: 1,
+              }));
+
+              await variant.update(
+                {
+                  totalStock: 1,
+                  stockStatus: "In Stock",
+                },
+                { transaction: t },
+              );
+            }
+
+            await VariantSize.bulkCreate(variantSizes, {
+              transaction: t,
+            });
           }
 
           /* ---------- REPLACE IMAGES ---------- */
@@ -273,9 +715,9 @@ exports.updateProductDetails = async (req, res) => {
               variantCode: v.variantCode,
               colorName: v.color.name,
               colorCode: v.color.code,
-              colorSwatch: v.color.swatch ?? null,
-              totalStock: v.totalStock || 0,
-              stockStatus: v.stockStatus || "Out of Stock",
+              // colorSwatch: v.color.swatch ?? null,
+              // totalStock: v.totalStock || 0,
+              // stockStatus: v.stockStatus || "Out of Stock",
             },
             { transaction: t },
           );
@@ -284,20 +726,55 @@ exports.updateProductDetails = async (req, res) => {
 
           /* sizes */
           if (Array.isArray(v.sizes)) {
-            await VariantSize.bulkCreate(
-              v.sizes.map((s) => ({
+            let variantSizes = [];
+
+            if (currentProductType === "READYMADE") {
+              variantSizes = v.sizes.map((s) => ({
                 variantId: variant.id,
-                size: s.size,
-                stock: s.stock,
-                // chest: s.chest ?? null,
-              })),
-              { transaction: t },
-            );
+                sizeMasterId: s.sizeMasterId,
+                stock: s.stock || 0,
+              }));
+
+              const totalStock = variantSizes.reduce(
+                (sum, item) => sum + Number(item.stock),
+                0,
+              );
+
+              await variant.update(
+                {
+                  totalStock,
+                  stockStatus: totalStock > 0 ? "In Stock" : "Out of Stock",
+                },
+                { transaction: t },
+              );
+            } else if (currentProductType === "CUSTOMIZED") {
+              variantSizes = v.sizes.map((s) => ({
+                variantId: variant.id,
+                sizeMasterId: s.sizeMasterId,
+                stock: 1,
+              }));
+
+              await variant.update(
+                {
+                  totalStock: 1,
+                  stockStatus: "In Stock",
+                },
+                { transaction: t },
+              );
+            }
+
+            await VariantSize.bulkCreate(variantSizes, {
+              transaction: t,
+            });
           }
 
           /* images */
           const imgs = variantImagesMap[`tmp_${v.tempKey}`] || [];
           if (imgs.length) {
+            console.log(
+              "Images received:",
+              variantImagesMap[`id_${variant.id}`],
+            );
             await VariantImage.bulkCreate(
               imgs.map((url) => ({
                 variantId: variant.id,
