@@ -51,7 +51,17 @@ app.use(express.json());
 app.use(passport.initialize());
 
 
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+app.use("/uploads",  
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://sajdhaj.advitsoftware.com",
+      "https://www.sajdhaj.advitsoftware.com",
+      "https://sajadhdev1.netlify.app",
+    ],
+    credentials: true,
+  }),
+  express.static(path.join(__dirname, "../uploads")));
 // app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 app.use("/api/admin", require("./routes/admin.auth.routes"))

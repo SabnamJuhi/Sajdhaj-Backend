@@ -7,26 +7,31 @@
 //     autoIncrement: true,
 //     primaryKey: true,
 //   },
-// //   userId: {
-// //     type: DataTypes.INTEGER,
-// //     allowNull: false,
-// //   },
-// //   productId: {
-// //     type: DataTypes.INTEGER, // General product (e.g., "Men's Premium Suit")
-// //     allowNull: false,
-// //   },
-// //   variantId: {
-// //     type: DataTypes.INTEGER, // Specific variant (e.g., "Blue / XL")
-// //     allowNull: false,
-// //   },
+
+//   userId: {
+//     type: DataTypes.INTEGER,
+//     allowNull: false,
+//   },
+
+//   productId: {
+//     type: DataTypes.INTEGER,
+//     allowNull: false,
+//   },
+
+//   variantId: {
+//     type: DataTypes.INTEGER,
+//     allowNull: false,
+//   },
+
+//   sizeId: {                     // ✅ FK instead of selectedSize
+//     type: DataTypes.INTEGER,
+//     allowNull: false,
+//   },
+
 //   quantity: {
 //     type: DataTypes.INTEGER,
 //     defaultValue: 1,
-//     validate: { min: 1 }, // Prevents negative quantities
-//   },
-//   selectedSize: {
-//       type: DataTypes.STRING,
-//       allowNull: false,
+//     validate: { min: 1 },
 //   },
 // });
 
@@ -37,10 +42,8 @@
 
 
 
-
 const { DataTypes } = require("sequelize");
 const sequelize = require("../../config/db");
-
 const CartItem = sequelize.define("CartItem", {
   id: {
     type: DataTypes.INTEGER,
@@ -63,15 +66,24 @@ const CartItem = sequelize.define("CartItem", {
     allowNull: false,
   },
 
-  sizeId: {                     // ✅ FK instead of selectedSize
+  // For READYMADE products
+  sizeId: {
     type: DataTypes.INTEGER,
-    allowNull: false,
+    allowNull: true,
+  },
+
+  // For CUSTOMIZED products
+  customMeasurements: {
+    type: DataTypes.JSON,
+    allowNull: true,
   },
 
   quantity: {
     type: DataTypes.INTEGER,
     defaultValue: 1,
-    validate: { min: 1 },
+    validate: {
+      min: 1,
+    },
   },
 });
 

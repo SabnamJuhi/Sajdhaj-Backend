@@ -10,346 +10,11 @@ const {
   OfferSub,
   OfferApplicableProduct,
   Coupon,
+  SizeMaster,
 } = require("../../models");
 const { calculateCartDiscount } = require("../../services/discount.service");
 const CartCoupon = require("../../models/offers/cartCoupon.model");
 const ShippingSetting = require("../../models/shippingFee/shipping.model");
-
-
-// exports.getCart = async (req, res) => {
-//   try {
-//     const userId = req.user.id;
-//     const now = new Date();
-
-//     // 0️⃣ Shipping Settings
-//     let shippingSettings = await ShippingSetting.findOne();
-//     if (!shippingSettings) {
-//       shippingSettings = await ShippingSetting.create({
-//         shippingFee: 50,
-//       });
-//     }
-
-//     const STATIC_SHIPPING_FEE = Number(shippingSettings.shippingFee);
-
-//     // 1️⃣ Saved Coupon
-//     const savedCoupon = await CartCoupon.findOne({ where: { userId } });
-//     const couponCode = savedCoupon?.couponCode || null;
-
-//     // 2️⃣ Cart Items
-//     const cartItems = await CartItem.findAll({
-//       where: { userId },
-//       include: [
-//         {
-//           model: Product,
-//           as: "product",
-//           include: [{ model: ProductPrice, as: "price" }],
-//         },
-//         {
-//           model: ProductVariant,
-//           as: "variant",
-//           include: [
-//             {
-//               model: VariantImage,
-//               as: "images",
-//               attributes: ["id", "imageUrl"],
-//               limit: 5,
-//             },
-//           ],
-//         },
-//         { model: VariantSize, as: "variantSize" },
-//       ],
-//       order: [["createdAt", "DESC"]],
-//     });
-
-//     let itemsCount = cartItems.length;
-//     let totalQuantity = 0;
-
-//     let subTotal = 0;
-//     let totalOriginalAmount = 0;
-//     let productOfferDiscount = 0;
-
-//     let eligibleForCouponTotal = 0;
-//     let eligibleItemsCount = 0;
-//     let itemsWithOffersCount = 0;
-
-//     // 3️⃣ Active Offers
-//     const activeOffers = await Offer.findAll({
-//       where: {
-//         isActive: true,
-//         startDate: { [Op.lte]: now },
-//         endDate: { [Op.gte]: now },
-//       },
-//       include: [
-//         { model: OfferSub, as: "subOffers" },
-//         { model: OfferApplicableProduct, as: "offerApplicableProducts" },
-//       ],
-//     });
-
-//     const processedItems = [];
-
-//     // 4️⃣ Process Cart Items
-//     for (let item of cartItems) {
-//       const sellingPrice = Number(item.product?.price?.sellingPrice || 0);
-//       const gstRate = Number(item.product?.gstRate || 0);
-
-//       const quantity = item.quantity;
-//       const currentStock = item.variantSize?.stock || 0;
-
-//       const isAvailable = currentStock > 0;
-//       const validQuantity = isAvailable ? Math.min(quantity, currentStock) : 0;
-
-//       totalQuantity += validQuantity;
-
-//       const originalAmount = sellingPrice * validQuantity;
-//       totalOriginalAmount += originalAmount;
-
-//       let itemDiscount = 0;
-//       let offerApplied = false;
-//       let offerDetails = null;
-
-//       // 🔥 OFFER LOGIC (SAME AS PLACE ORDER)
-//       for (let offer of activeOffers) {
-//         const isProductEligible = offer.offerApplicableProducts.some(
-//           (p) => p.productId === item.productId
-//         );
-
-//         if (!isProductEligible) continue;
-
-//         const subOffer = offer.subOffers[0];
-//         if (!subOffer) continue;
-
-//         if (originalAmount < subOffer.minOrderValue) continue;
-
-//         if (subOffer.discountType === "PERCENTAGE") {
-//           let discount =
-//             (originalAmount * subOffer.discountValue) / 100;
-
-//           if (subOffer.maxDiscount) {
-//             discount = Math.min(discount, subOffer.maxDiscount);
-//           }
-
-//           itemDiscount = discount;
-
-//           offerDetails = {
-//             type: "PERCENTAGE",
-//             value: subOffer.discountValue,
-//             maxDiscount: subOffer.maxDiscount,
-//           };
-//         } else if (subOffer.discountType === "FLAT") {
-//           itemDiscount = subOffer.discountValue;
-
-//           offerDetails = {
-//             type: "FLAT",
-//             value: subOffer.discountValue,
-//           };
-//         }
-
-//         offerApplied = true;
-//         break;
-//       }
-
-//       const finalAmount = originalAmount - itemDiscount;
-
-//       if (isAvailable) {
-//         subTotal += finalAmount;
-//         productOfferDiscount += itemDiscount;
-
-//         if (!offerApplied) {
-//           eligibleForCouponTotal += originalAmount;
-//           eligibleItemsCount++;
-//         } else {
-//           itemsWithOffersCount++;
-//         }
-//       }
-
-//       // 🖼 Images
-//       const images = item.variant?.images || [];
-//       const primaryImage = images[0];
-
-//       processedItems.push({
-//         cartId: item.id,
-//         productId: item.productId,
-//         variantId: item.variantId,
-//         sizeId: item.sizeId,
-
-//         title: item.product?.title || "Unknown Product",
-
-//         variant: {
-//           color: item.variant?.colorName,
-//           size: item.variantSize?.size,
-//           stock: currentStock,
-//           status: isAvailable ? "In Stock" : "Out of Stock",
-//           isAvailable,
-//         },
-
-//         images: {
-//           all: images.map((img) => ({
-//             id: img.id,
-//             url: img.imageUrl,
-//           })),
-//           primary: primaryImage?.imageUrl || null,
-//           count: images.length,
-//         },
-
-//         image: primaryImage?.imageUrl || null,
-
-//         price: sellingPrice,
-//         quantity: validQuantity,
-//         originalAmount,
-//         itemDiscount,
-//         finalAmount,
-//         gstRate,
-//         offerApplied,
-//         offerDetails,
-//       });
-//     }
-
-//     // ===============================
-//     // COUPON
-//     // ===============================
-
-//     let couponDiscount = 0;
-//     let appliedCoupon = null;
-//     let couponDetails = null;
-
-//     if (couponCode && eligibleForCouponTotal > 0) {
-//       const coupon = await Coupon.findOne({
-//         where: {
-//           code: couponCode,
-//           isActive: true,
-//           startDate: { [Op.lte]: now },
-//           endDate: { [Op.gte]: now },
-//         },
-//       });
-
-//       if (coupon) {
-//         const minCartValue = Number(coupon.minCartValue || 0);
-
-//         if (eligibleForCouponTotal >= minCartValue) {
-//           appliedCoupon = coupon.code;
-
-//           if (coupon.discountType === "PERCENTAGE") {
-//             let discount =
-//               (eligibleForCouponTotal *
-//                 Number(coupon.discountValue || 0)) /
-//               100;
-
-//             if (coupon.maxDiscount) {
-//               discount = Math.min(discount, coupon.maxDiscount);
-//             }
-
-//             couponDiscount = discount;
-
-//             couponDetails = {
-//               type: "PERCENTAGE",
-//               value: coupon.discountValue,
-//               maxDiscount: coupon.maxDiscount,
-//             };
-//           } else if (coupon.discountType === "FLAT") {
-//             const flatDiscount = Number(coupon.discountValue || 0);
-
-//             couponDiscount = Math.min(
-//               flatDiscount,
-//               eligibleForCouponTotal
-//             );
-
-//             couponDetails = {
-//               type: "FLAT",
-//               value: flatDiscount,
-//             };
-//           }
-//         }
-//       }
-//     }
-
-//     const finalSubTotal = subTotal - couponDiscount;
-
-//     // ===============================
-//     // GST
-//     // ===============================
-
-//     let taxAmount = 0;
-//     let itemizedTax = [];
-
-//     for (let item of processedItems) {
-//       if (!item.variant.isAvailable) continue;
-
-//       let itemAfterCoupon = item.finalAmount;
-
-//       if (appliedCoupon && !item.offerApplied) {
-//         const proportion =
-//           item.originalAmount / eligibleForCouponTotal;
-
-//         itemAfterCoupon =
-//           item.finalAmount - couponDiscount * proportion;
-//       }
-
-//       const tax = Math.round(
-//         (itemAfterCoupon * item.gstRate) / 100
-//       );
-
-//       taxAmount += tax;
-
-//       itemizedTax.push({
-//         productId: item.productId,
-//         title: item.title,
-//         baseAmount: itemAfterCoupon,
-//         gstRate: item.gstRate,
-//         taxAmount: tax,
-//       });
-//     }
-
-//     const shippingFee = STATIC_SHIPPING_FEE;
-//     const grandTotal = finalSubTotal + taxAmount + shippingFee;
-
-//     return res.status(200).json({
-//       success: true,
-//       data: { items: processedItems },
-//       summary: {
-//         itemsCount,
-//         totalQuantity,
-//         totalOriginalAmount,
-//         productOfferDiscount,
-//         subTotal,
-
-//         couponDiscount,
-//         finalSubTotal,
-
-//         tax: {
-//           amount: taxAmount,
-//           breakdown: itemizedTax,
-//         },
-
-//         shippingFee,
-//         grandTotal,
-//         currency: "INR",
-
-//         appliedCoupon,
-//         couponDetails,
-
-//         couponEligibility: {
-//           eligibleAmount: eligibleForCouponTotal,
-//           eligibleItemsCount,
-//           itemsWithOffersCount,
-//         },
-
-//         canCheckout:
-//           processedItems.length > 0 &&
-//           processedItems.every(
-//             (i) => i.variant.isAvailable && i.quantity > 0
-//           ),
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Get Cart Error:", error);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: "Something went wrong",
-//       error: error.message,
-//     });
-//   }
-// };
 
 exports.getCart = async (req, res) => {
   try {
@@ -368,9 +33,7 @@ exports.getCart = async (req, res) => {
       });
     }
 
-    const STATIC_SHIPPING_FEE = Number(
-      shippingSettings.shippingFee || 0
-    );
+    const STATIC_SHIPPING_FEE = Number(shippingSettings.shippingFee || 0);
 
     // ===============================
     // SAVED COUPON
@@ -419,6 +82,14 @@ exports.getCart = async (req, res) => {
         {
           model: VariantSize,
           as: "variantSize",
+          required: false,
+          include: [
+            {
+              model: SizeMaster,
+              as: "sizeDetails",
+              attributes: ["id", "name"],
+            },
+          ],
         },
       ],
 
@@ -429,42 +100,41 @@ exports.getCart = async (req, res) => {
     // ACTIVE PRODUCT OFFERS
     // ===============================
 
-    const productOffers =
-      await OfferApplicableProduct.findAll({
-        include: [
-          {
-            model: Offer,
-            as: "offerDetails",
+    const productOffers = await OfferApplicableProduct.findAll({
+      include: [
+        {
+          model: Offer,
+          as: "offerDetails",
 
-            where: {
-              isActive: true,
-              startDate: {
-                [Op.lte]: now,
-              },
-              endDate: {
-                [Op.gte]: now,
-              },
+          where: {
+            isActive: true,
+            startDate: {
+              [Op.lte]: now,
             },
-
-            required: true,
-
-            include: [
-              {
-                model: OfferSub,
-                as: "subOffers",
-
-                attributes: [
-                  "id",
-                  "discountType",
-                  "discountValue",
-                  "maxDiscount",
-                  "minOrderValue",
-                ],
-              },
-            ],
+            endDate: {
+              [Op.gte]: now,
+            },
           },
-        ],
-      });
+
+          required: true,
+
+          include: [
+            {
+              model: OfferSub,
+              as: "subOffers",
+
+              attributes: [
+                "id",
+                "discountType",
+                "discountValue",
+                "maxDiscount",
+                "minOrderValue",
+              ],
+            },
+          ],
+        },
+      ],
+    });
 
     // ===============================
     // SUMMARY VARIABLES
@@ -488,30 +158,41 @@ exports.getCart = async (req, res) => {
     // ===============================
 
     for (let item of cartItems) {
-      const sellingPrice = Number(
-        item.product?.price?.sellingPrice || 0
-      );
+      const sellingPrice = Number(item.product?.price?.sellingPrice || 0);
 
-      const gstRate = Number(
-        item.product?.gstRate || 0
-      );
+      const gstRate = Number(item.product?.gstRate || 0);
 
       const quantity = Number(item.quantity || 0);
 
-      const currentStock = Number(
-        item.variantSize?.stock || 0
-      );
+      // const currentStock = Number(item.variantSize?.stock || 0);
 
-      const isAvailable = currentStock > 0;
+      // const isAvailable = currentStock > 0;
 
-      const validQuantity = isAvailable
-        ? Math.min(quantity, currentStock)
-        : 0;
+      // const validQuantity = isAvailable ? Math.min(quantity, currentStock) : 0;
+
+      let currentStock = 0;
+      let isAvailable = false;
+      let validQuantity = 0;
+
+      if (item.product?.productType === "READYMADE") {
+        currentStock = Number(item.variantSize?.stock || 0);
+
+        isAvailable = currentStock > 0;
+
+        validQuantity = isAvailable ? Math.min(quantity, currentStock) : 0;
+      } else {
+        // CUSTOMIZED product uses variant stock
+
+        currentStock = Number(item.variant?.totalStock || 0);
+
+        isAvailable = currentStock > 0;
+
+        validQuantity = isAvailable ? 1 : 0;
+      }
 
       totalQuantity += validQuantity;
 
-      const originalAmount =
-        sellingPrice * validQuantity;
+      const originalAmount = sellingPrice * validQuantity;
 
       totalOriginalAmount += originalAmount;
 
@@ -527,49 +208,33 @@ exports.getCart = async (req, res) => {
       // FIND APPLICABLE PRODUCT OFFER
       // ===============================
 
-      const applicableOffer =
-        productOffers.find(
-          (o) => o.productId === item.productId
-        );
+      const applicableOffer = productOffers.find(
+        (o) => o.productId === item.productId,
+      );
 
       if (applicableOffer) {
-        const activeOffer =
-          applicableOffer.offerDetails;
+        const activeOffer = applicableOffer.offerDetails;
 
         // Find exact mapped suboffer
         const subOffer =
           activeOffer?.subOffers?.find(
-            (s) =>
-              s.id === applicableOffer.subOfferId
-          ) ||
-          activeOffer?.subOffers?.[0];
+            (s) => s.id === applicableOffer.subOfferId,
+          ) || activeOffer?.subOffers?.[0];
 
         if (subOffer) {
-          const minOrderValue = Number(
-            subOffer.minOrderValue || 0
-          );
+          const minOrderValue = Number(subOffer.minOrderValue || 0);
 
           if (originalAmount >= minOrderValue) {
             // ===============================
             // PERCENTAGE DISCOUNT
             // ===============================
 
-            if (
-              subOffer.discountType ===
-              "PERCENTAGE"
-            ) {
+            if (subOffer.discountType === "PERCENTAGE") {
               let discount =
-                (originalAmount *
-                  Number(
-                    subOffer.discountValue || 0
-                  )) /
-                100;
+                (originalAmount * Number(subOffer.discountValue || 0)) / 100;
 
               if (subOffer.maxDiscount) {
-                discount = Math.min(
-                  discount,
-                  Number(subOffer.maxDiscount)
-                );
+                discount = Math.min(discount, Number(subOffer.maxDiscount));
               }
 
               itemDiscount = discount;
@@ -578,47 +243,35 @@ exports.getCart = async (req, res) => {
                 offerId: activeOffer.id,
                 subOfferId: subOffer.id,
 
-                offerCode:
-                  activeOffer.offerCode,
+                offerCode: activeOffer.offerCode,
 
                 type: "PERCENTAGE",
 
-                value:
-                  subOffer.discountValue,
+                value: subOffer.discountValue,
 
-                maxDiscount:
-                  subOffer.maxDiscount,
+                maxDiscount: subOffer.maxDiscount,
 
-                minOrderValue:
-                  subOffer.minOrderValue,
+                minOrderValue: subOffer.minOrderValue,
               };
             }
 
             // ===============================
             // FLAT DISCOUNT
             // ===============================
-
-            else if (
-              subOffer.discountType === "FLAT"
-            ) {
-              itemDiscount = Number(
-                subOffer.discountValue || 0
-              );
+            else if (subOffer.discountType === "FLAT") {
+              itemDiscount = Number(subOffer.discountValue || 0);
 
               offerDetails = {
                 offerId: activeOffer.id,
                 subOfferId: subOffer.id,
 
-                offerCode:
-                  activeOffer.offerCode,
+                offerCode: activeOffer.offerCode,
 
                 type: "FLAT",
 
-                value:
-                  subOffer.discountValue,
+                value: subOffer.discountValue,
 
-                minOrderValue:
-                  subOffer.minOrderValue,
+                minOrderValue: subOffer.minOrderValue,
               };
             }
 
@@ -631,8 +284,7 @@ exports.getCart = async (req, res) => {
       // FINAL ITEM AMOUNT
       // ===============================
 
-      const finalAmount =
-        originalAmount - itemDiscount;
+      const finalAmount = originalAmount - itemDiscount;
 
       // ===============================
       // SUMMARY CALCULATIONS
@@ -645,8 +297,7 @@ exports.getCart = async (req, res) => {
 
         // Coupon only on products without offers
         if (!offerApplied) {
-          eligibleForCouponTotal +=
-            originalAmount;
+          eligibleForCouponTotal += originalAmount;
 
           eligibleItemsCount++;
         } else {
@@ -658,8 +309,7 @@ exports.getCart = async (req, res) => {
       // IMAGES
       // ===============================
 
-      const images =
-        item.variant?.images || [];
+      const images = item.variant?.images || [];
 
       const primaryImage = images[0];
 
@@ -676,20 +326,35 @@ exports.getCart = async (req, res) => {
 
         sizeId: item.sizeId,
 
-        title:
-          item.product?.title ||
-          "Unknown Product",
+        productType: item.product?.productType,
+
+        customMeasurements: item.customMeasurements || null,
+
+        title: item.product?.title || "Unknown Product",
 
         variant: {
           color: item.variant?.colorName,
 
-          size: item.variantSize?.size,
+          selectedSize: item.variantSize
+            ? {
+                id: item.variantSize.id,
 
-          stock: currentStock,
+                sizeMasterId: item.variantSize.sizeMasterId,
 
-          status: isAvailable
-            ? "In Stock"
-            : "Out of Stock",
+                name: item.variantSize.sizeDetails?.name || null,
+              }
+            : null,
+
+          sizeStock:
+            item.product?.productType === "READYMADE"
+              ? Number(item.variantSize?.stock || 0)
+              : null,
+
+          variantStock: Number(item.variant?.totalStock || 0),
+
+          stockStatus: item.variant?.stockStatus,
+
+          status: isAvailable ? "In Stock" : "Out of Stock",
 
           isAvailable,
         },
@@ -700,14 +365,12 @@ exports.getCart = async (req, res) => {
             url: img.imageUrl,
           })),
 
-          primary:
-            primaryImage?.imageUrl || null,
+          primary: primaryImage?.imageUrl || null,
 
           count: images.length,
         },
 
-        image:
-          primaryImage?.imageUrl || null,
+        image: primaryImage?.imageUrl || null,
 
         price: sellingPrice,
 
@@ -719,7 +382,7 @@ exports.getCart = async (req, res) => {
 
         finalAmount,
 
-        gstRate,
+        // gstRate,
 
         offerApplied,
 
@@ -737,10 +400,7 @@ exports.getCart = async (req, res) => {
 
     let couponDetails = null;
 
-    if (
-      couponCode &&
-      eligibleForCouponTotal > 0
-    ) {
+    if (couponCode && eligibleForCouponTotal > 0) {
       const coupon = await Coupon.findOne({
         where: {
           code: couponCode,
@@ -758,36 +418,22 @@ exports.getCart = async (req, res) => {
       });
 
       if (coupon) {
-        const minCartValue = Number(
-          coupon.minCartValue || 0
-        );
+        const minCartValue = Number(coupon.minCartValue || 0);
 
-        if (
-          eligibleForCouponTotal >=
-          minCartValue
-        ) {
+        if (eligibleForCouponTotal >= minCartValue) {
           appliedCoupon = coupon.code;
 
           // ===============================
           // PERCENTAGE COUPON
           // ===============================
 
-          if (
-            coupon.discountType ===
-            "PERCENTAGE"
-          ) {
+          if (coupon.discountType === "PERCENTAGE") {
             let discount =
-              (eligibleForCouponTotal *
-                Number(
-                  coupon.discountValue || 0
-                )) /
+              (eligibleForCouponTotal * Number(coupon.discountValue || 0)) /
               100;
 
             if (coupon.maxDiscount) {
-              discount = Math.min(
-                discount,
-                Number(coupon.maxDiscount)
-              );
+              discount = Math.min(discount, Number(coupon.maxDiscount));
             }
 
             couponDiscount = discount;
@@ -795,29 +441,19 @@ exports.getCart = async (req, res) => {
             couponDetails = {
               type: "PERCENTAGE",
 
-              value:
-                coupon.discountValue,
+              value: coupon.discountValue,
 
-              maxDiscount:
-                coupon.maxDiscount,
+              maxDiscount: coupon.maxDiscount,
             };
           }
 
           // ===============================
           // FLAT COUPON
           // ===============================
+          else if (coupon.discountType === "FLAT") {
+            const flatDiscount = Number(coupon.discountValue || 0);
 
-          else if (
-            coupon.discountType === "FLAT"
-          ) {
-            const flatDiscount = Number(
-              coupon.discountValue || 0
-            );
-
-            couponDiscount = Math.min(
-              flatDiscount,
-              eligibleForCouponTotal
-            );
+            couponDiscount = Math.min(flatDiscount, eligibleForCouponTotal);
 
             couponDetails = {
               type: "FLAT",
@@ -833,8 +469,7 @@ exports.getCart = async (req, res) => {
     // FINAL SUBTOTAL
     // ===============================
 
-    const finalSubTotal =
-      subTotal - couponDiscount;
+    const finalSubTotal = subTotal - couponDiscount;
 
     // ===============================
     // GST CALCULATION
@@ -845,30 +480,18 @@ exports.getCart = async (req, res) => {
     let itemizedTax = [];
 
     for (let item of processedItems) {
-      if (!item.variant.isAvailable)
-        continue;
+      if (!item.variant.isAvailable) continue;
 
-      let itemAfterCoupon =
-        item.finalAmount;
+      let itemAfterCoupon = item.finalAmount;
 
       // Coupon distribution
-      if (
-        appliedCoupon &&
-        !item.offerApplied
-      ) {
-        const proportion =
-          item.originalAmount /
-          eligibleForCouponTotal;
+      if (appliedCoupon && !item.offerApplied) {
+        const proportion = item.originalAmount / eligibleForCouponTotal;
 
-        itemAfterCoupon =
-          item.finalAmount -
-          couponDiscount * proportion;
+        itemAfterCoupon = item.finalAmount - couponDiscount * proportion;
       }
 
-      const tax = Math.round(
-        (itemAfterCoupon * item.gstRate) /
-          100
-      );
+      const tax = Math.round((itemAfterCoupon * item.gstRate) / 100);
 
       taxAmount += tax;
 
@@ -889,13 +512,9 @@ exports.getCart = async (req, res) => {
     // GRAND TOTAL
     // ===============================
 
-    const shippingFee =
-      STATIC_SHIPPING_FEE;
+    const shippingFee = STATIC_SHIPPING_FEE;
 
-    const grandTotal =
-      finalSubTotal +
-      taxAmount +
-      shippingFee;
+    const grandTotal = finalSubTotal + shippingFee;
 
     // ===============================
     // RESPONSE
@@ -923,11 +542,11 @@ exports.getCart = async (req, res) => {
 
         finalSubTotal,
 
-        tax: {
-          amount: taxAmount,
+        // tax: {
+        //   amount: taxAmount,
 
-          breakdown: itemizedTax,
-        },
+        //   breakdown: itemizedTax,
+        // },
 
         shippingFee,
 
@@ -940,8 +559,7 @@ exports.getCart = async (req, res) => {
         couponDetails,
 
         couponEligibility: {
-          eligibleAmount:
-            eligibleForCouponTotal,
+          eligibleAmount: eligibleForCouponTotal,
 
           eligibleItemsCount,
 
@@ -950,18 +568,11 @@ exports.getCart = async (req, res) => {
 
         canCheckout:
           processedItems.length > 0 &&
-          processedItems.every(
-            (i) =>
-              i.variant.isAvailable &&
-              i.quantity > 0
-          ),
+          processedItems.every((i) => i.variant.isAvailable && i.quantity > 0),
       },
     });
   } catch (error) {
-    console.error(
-      "Get Cart Error:",
-      error
-    );
+    console.error("Get Cart Error:", error);
 
     return res.status(500).json({
       success: false,
@@ -973,12 +584,317 @@ exports.getCart = async (req, res) => {
   }
 };
 
+// exports.addToCart = async (req, res) => {
+//   try {
+//     const { productId, variantId, sizeId, quantity = 1 } = req.body; // Default quantity to 1 if not provided
+//     const userId = req.user.id;
+
+//     // Validate quantity
+//     if (quantity < 1) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Quantity must be at least 1",
+//       });
+//     }
+
+//     if (quantity > 10) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Maximum quantity allowed is 10",
+//       });
+//     }
+
+//     // Validate variant belongs to product
+//     const validVariant = await ProductVariant.findOne({
+//       where: { id: variantId, productId },
+//     });
+
+//     if (!validVariant) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid variant for this product",
+//       });
+//     }
+
+//     // Validate size belongs to variant
+//     const validSize = await VariantSize.findOne({
+//       where: { id: sizeId, variantId },
+//     });
+
+//     if (!validSize) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid size for this variant",
+//       });
+//     }
+
+//     // Check stock availability
+//     if (validSize.stock < quantity) {
+//       return res.status(400).json({
+//         success: false,
+//         message: `Only ${validSize.stock} items available in stock`,
+//       });
+//     }
+
+//     // Find existing cart item
+//     const existingItem = await CartItem.findOne({
+//       where: { userId, productId, variantId, sizeId },
+//     });
+
+//     if (existingItem) {
+//       // Check if adding quantity would exceed stock
+//       const newQuantity = existingItem.quantity + quantity;
+//       if (newQuantity > validSize.stock) {
+//         return res.status(400).json({
+//           success: false,
+//           message: `Cannot add ${quantity} more. Only ${validSize.stock - existingItem.quantity} available`,
+//         });
+//       }
+
+//       // Update existing item quantity
+//       await existingItem.increment("quantity", { by: quantity });
+
+//       return res.json({
+//         success: true,
+//         message: `Added ${quantity} item(s) to cart`,
+//         data: {
+//           cartItemId: existingItem.id,
+//           newQuantity: existingItem.quantity + quantity,
+//           action: "updated",
+//         },
+//       });
+//     } else {
+//       // Create new cart item
+//       const newItem = await CartItem.create({
+//         userId,
+//         productId,
+//         variantId,
+//         sizeId,
+//         quantity,
+//       });
+
+//       return res.json({
+//         success: true,
+//         message: `Added ${quantity} item(s) to cart`,
+//         data: {
+//           cartItemId: newItem.id,
+//           quantity: newItem.quantity,
+//           action: "created",
+//         },
+//       });
+//     }
+//   } catch (error) {
+//     console.error("Add to Cart Error:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+
+// exports.addToCart = async (req, res) => {
+//   try {
+//     const {
+//       productId,
+//       variantId,
+//       sizeId,
+//       customMeasurements,
+//       quantity = 1,
+//     } = req.body;
+
+//     const userId = req.user.id;
+
+//     const product = await Product.findByPk(productId);
+
+//     if (!product) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Product not found",
+//       });
+//     }
+
+//     // Quantity validation
+//     if (quantity < 1) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Quantity must be at least 1",
+//       });
+//     }
+
+//     if (quantity > 10) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Maximum quantity allowed is 10",
+//       });
+//     }
+
+//     // Validate variant
+//     const validVariant = await ProductVariant.findOne({
+//       where: {
+//         id: variantId,
+//         productId,
+//       },
+//     });
+
+//     if (!validVariant) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid variant for this product",
+//       });
+//     }
+
+//     let validSize = null;
+
+//     // ==================================
+//     // READYMADE PRODUCT
+//     // ==================================
+//     if (product.productType === "READYMADE") {
+//       if (!sizeId) {
+//         return res.status(400).json({
+//           success: false,
+//           message: "Size is required",
+//         });
+//       }
+
+//       validSize = await VariantSize.findOne({
+//         where: {
+//           id: sizeId,
+//           variantId,
+//         },
+//       });
+
+//       if (!validSize) {
+//         return res.status(400).json({
+//           success: false,
+//           message: "Invalid size",
+//         });
+//       }
+
+//       if (validSize.stock < quantity) {
+//         return res.status(400).json({
+//           success: false,
+//           message: `Only ${validSize.stock} items available`,
+//         });
+//       }
+//     }
+
+//     // ==================================
+//     // CUSTOMIZED PRODUCT
+//     // ==================================
+//     if (product.productType === "CUSTOMIZED") {
+//       // Customer selected predefined size
+//       if (sizeId) {
+//         validSize = await VariantSize.findOne({
+//           where: {
+//             id: sizeId,
+//             variantId,
+//           },
+//         });
+
+//         if (!validSize) {
+//           return res.status(400).json({
+//             success: false,
+//             message: "Invalid size",
+//           });
+//         }
+//       }
+
+//       // No predefined size and no measurements
+//       if (!sizeId && !customMeasurements) {
+//         return res.status(400).json({
+//           success: false,
+//           message:
+//             "Either sizeId or customMeasurements is required",
+//         });
+//       }
+//     }
+
+//     // ==================================
+//     // FIND EXISTING CART ITEM
+//     // ==================================
+
+//     const existingItem = await CartItem.findOne({
+//       where: {
+//         userId,
+//         productId,
+//         variantId,
+//         sizeId: sizeId || null,
+//       },
+//     });
+
+//     if (existingItem) {
+//       await existingItem.increment("quantity", {
+//         by: quantity,
+//       });
+
+//       return res.json({
+//         success: true,
+//         message: "Cart updated",
+//         data: {
+//           cartItemId: existingItem.id,
+//           quantity: existingItem.quantity + quantity,
+//           action: "updated",
+//         },
+//       });
+//     }
+
+//     // ==================================
+//     // CREATE CART ITEM
+//     // ==================================
+
+//     const newItem = await CartItem.create({
+//       userId,
+//       productId,
+//       variantId,
+//       sizeId: sizeId || null,
+//       customMeasurements:
+//         customMeasurements || null,
+//       quantity,
+//     });
+
+//     return res.json({
+//       success: true,
+//       message: "Added to cart",
+//       data: {
+//         cartItemId: newItem.id,
+//         action: "created",
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Add To Cart Error:", error);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message,
+//     });
+//   }
+// };
+
 exports.addToCart = async (req, res) => {
   try {
-    const { productId, variantId, sizeId, quantity = 1 } = req.body; // Default quantity to 1 if not provided
+    const {
+      productId,
+      variantId,
+      sizeId,
+      customMeasurements,
+      quantity = 1,
+    } = req.body;
+
     const userId = req.user.id;
 
-    // Validate quantity
+    const product = await Product.findByPk(productId);
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    // ===========================
+    // VALIDATE QUANTITY
+    // ===========================
+
     if (quantity < 1) {
       return res.status(400).json({
         success: false,
@@ -986,16 +902,22 @@ exports.addToCart = async (req, res) => {
       });
     }
 
-    if (quantity > 10) {
+    if (product.productType === "READYMADE" && quantity > 10) {
       return res.status(400).json({
         success: false,
         message: "Maximum quantity allowed is 10",
       });
     }
 
-    // Validate variant belongs to product
+    // ===========================
+    // VALIDATE VARIANT
+    // ===========================
+
     const validVariant = await ProductVariant.findOne({
-      where: { id: variantId, productId },
+      where: {
+        id: variantId,
+        productId,
+      },
     });
 
     if (!validVariant) {
@@ -1005,55 +927,78 @@ exports.addToCart = async (req, res) => {
       });
     }
 
-    // Validate size belongs to variant
-    const validSize = await VariantSize.findOne({
-      where: { id: sizeId, variantId },
-    });
+    let validSize = null;
 
-    if (!validSize) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid size for this variant",
-      });
-    }
+    // =====================================================
+    // READYMADE PRODUCT
+    // =====================================================
 
-    // Check stock availability
-    if (validSize.stock < quantity) {
-      return res.status(400).json({
-        success: false,
-        message: `Only ${validSize.stock} items available in stock`,
-      });
-    }
-
-    // Find existing cart item
-    const existingItem = await CartItem.findOne({
-      where: { userId, productId, variantId, sizeId },
-    });
-
-    if (existingItem) {
-      // Check if adding quantity would exceed stock
-      const newQuantity = existingItem.quantity + quantity;
-      if (newQuantity > validSize.stock) {
+    if (product.productType === "READYMADE") {
+      if (!sizeId) {
         return res.status(400).json({
           success: false,
-          message: `Cannot add ${quantity} more. Only ${validSize.stock - existingItem.quantity} available`,
+          message: "Size is required",
         });
       }
 
-      // Update existing item quantity
-      await existingItem.increment("quantity", { by: quantity });
-
-      return res.json({
-        success: true,
-        message: `Added ${quantity} item(s) to cart`,
-        data: {
-          cartItemId: existingItem.id,
-          newQuantity: existingItem.quantity + quantity,
-          action: "updated",
+      validSize = await VariantSize.findOne({
+        where: {
+          id: sizeId,
+          variantId,
         },
       });
-    } else {
-      // Create new cart item
+
+      if (!validSize) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid size",
+        });
+      }
+
+      if (validSize.stock < quantity) {
+        return res.status(400).json({
+          success: false,
+          message: `Only ${validSize.stock} items available`,
+        });
+      }
+
+      // Existing cart item
+      const existingItem = await CartItem.findOne({
+        where: {
+          userId,
+          productId,
+          variantId,
+          sizeId,
+        },
+      });
+
+      if (existingItem) {
+        const newQuantity = existingItem.quantity + quantity;
+
+        if (newQuantity > validSize.stock) {
+          return res.status(400).json({
+            success: false,
+            message: `Only ${
+              validSize.stock - existingItem.quantity
+            } more items available`,
+          });
+        }
+
+        await existingItem.increment("quantity", {
+          by: quantity,
+        });
+
+        return res.json({
+          success: true,
+          message: "Cart updated",
+          data: {
+            cartItemId: existingItem.id,
+            quantity: existingItem.quantity + quantity,
+            action: "updated",
+          },
+        });
+      }
+
       const newItem = await CartItem.create({
         userId,
         productId,
@@ -1064,7 +1009,7 @@ exports.addToCart = async (req, res) => {
 
       return res.json({
         success: true,
-        message: `Added ${quantity} item(s) to cart`,
+        message: "Added to cart",
         data: {
           cartItemId: newItem.id,
           quantity: newItem.quantity,
@@ -1072,9 +1017,90 @@ exports.addToCart = async (req, res) => {
         },
       });
     }
+
+    // =====================================================
+    // CUSTOMIZED PRODUCT
+    // =====================================================
+
+    if (product.productType === "CUSTOMIZED") {
+      // Quantity always 1
+      if (quantity > 1) {
+        return res.status(400).json({
+          success: false,
+          message: "Customized products can only be added once",
+        });
+      }
+
+      // Optional predefined size
+      if (sizeId) {
+        validSize = await VariantSize.findOne({
+          where: {
+            id: sizeId,
+            variantId,
+          },
+        });
+
+        if (!validSize) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid size",
+          });
+        }
+      }
+
+      // Must provide size or measurements
+      if (!sizeId && !customMeasurements) {
+        return res.status(400).json({
+          success: false,
+          message: "Either sizeId or customMeasurements is required",
+        });
+      }
+
+      // SAME PRODUCT + VARIANT CAN EXIST ONLY ONCE
+      const existingCustomizedItem = await CartItem.findOne({
+        where: {
+          userId,
+          productId,
+          variantId,
+        },
+      });
+
+      if (existingCustomizedItem) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "This design is already in your cart. Remove it first if you want to change the size or measurements.",
+        });
+      }
+
+      const newItem = await CartItem.create({
+        userId,
+        productId,
+        variantId,
+        sizeId: sizeId || null,
+        customMeasurements: customMeasurements || null,
+        quantity: 1,
+      });
+
+      return res.json({
+        success: true,
+        message: "Customized product added to cart",
+        data: {
+          cartItemId: newItem.id,
+          quantity: 1,
+          action: "created",
+        },
+      });
+    }
+
+    return res.status(400).json({
+      success: false,
+      message: "Invalid product type",
+    });
   } catch (error) {
-    console.error("Add to Cart Error:", error);
-    res.status(500).json({
+    console.error("Add To Cart Error:", error);
+
+    return res.status(500).json({
       success: false,
       message: error.message,
     });
@@ -1142,26 +1168,73 @@ exports.incrementCartQuantity = async (req, res) => {
   }
 };
 
+// exports.decreaseQuantity = async (req, res) => {
+//   try {
+//     const { productId, variantId, sizeId } = req.body;
+//     const userId = req.user.id;
+
+//     const item = await CartItem.findOne({
+//       where: { userId, productId, variantId, sizeId },
+//     });
+
+//     if (!item) return res.status(404).json({ message: "Item not found" });
+
+//     if (item.quantity > 1) {
+//       await item.decrement("quantity", { by: 1 });
+//     } else {
+//       await item.destroy();
+//     }
+
+//     res.json({ success: true, message: "Quantity decreased" });
+//   } catch (error) {
+//     res.status(500).json({ success: false, message: error.message });
+//   }
+// };
+
 exports.decreaseQuantity = async (req, res) => {
   try {
-    const { productId, variantId, sizeId } = req.body;
+    const { id: cartItemId } = req.params;
     const userId = req.user.id;
 
     const item = await CartItem.findOne({
-      where: { userId, productId, variantId, sizeId },
+      where: {
+        id: cartItemId,
+        userId,
+      },
     });
 
-    if (!item) return res.status(404).json({ message: "Item not found" });
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        message: "Cart item not found",
+      });
+    }
 
     if (item.quantity > 1) {
       await item.decrement("quantity", { by: 1 });
-    } else {
-      await item.destroy();
+      await item.reload();
+
+      return res.json({
+        success: true,
+        message: "Quantity decreased",
+        data: {
+          cartItemId: item.id,
+          quantity: item.quantity,
+        },
+      });
     }
 
-    res.json({ success: true, message: "Quantity decreased" });
+    await item.destroy();
+
+    return res.json({
+      success: true,
+      message: "Item removed from cart",
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
