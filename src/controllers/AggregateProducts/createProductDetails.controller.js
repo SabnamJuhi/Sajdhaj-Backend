@@ -429,7 +429,6 @@ exports.createProduct = async (req, res) => {
       }
 
       /* -------- SIZES -------- */
-      /* -------- SIZES -------- */
 
       if (Array.isArray(v.sizes) && v.sizes.length) {
         let variantSizes = [];

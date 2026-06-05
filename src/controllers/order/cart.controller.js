@@ -1297,27 +1297,24 @@ exports.removeFromCart = async (req, res) => {
   }
 };
 
-// DELETE /api/cart/item
+// DELETE /api/cart/item/:cartItemId
 exports.deleteCartItem = async (req, res) => {
   try {
     const userId = req.user?.id || req.body.userId;
 
-    const { productId, variantId, sizeId } = req.body;
+    const { cartItemId } = req.params;
 
-    if (!productId || !variantId || !sizeId) {
+    if (!cartItemId) {
       return res.status(400).json({
         success: false,
-        message: "productId, variantId and sizeId are required",
+        message: "cartItemId is required",
       });
     }
 
-    // Find exact cart row
     const cartItem = await CartItem.findOne({
       where: {
-        userId,
-        productId,
-        variantId,
-        sizeId,
+        id: cartItemId,
+        userId, // security check
       },
     });
 
@@ -1328,12 +1325,12 @@ exports.deleteCartItem = async (req, res) => {
       });
     }
 
-    // Delete whole row (even if quantity = 29 or 14 etc.)
     await cartItem.destroy();
 
     return res.status(200).json({
       success: true,
       message: "Cart item deleted successfully",
+      deletedCartItemId: Number(cartItemId),
     });
   } catch (error) {
     console.error("Delete cart item error:", error);
@@ -1341,6 +1338,7 @@ exports.deleteCartItem = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Server error while deleting cart item",
+      error: error.message,
     });
   }
 };

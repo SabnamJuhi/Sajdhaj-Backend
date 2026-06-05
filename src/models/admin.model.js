@@ -23,7 +23,12 @@ const Admin = sequelize.define("Admin", {
   password: {
     type: DataTypes.STRING,
     allowNull: false
-  }
+  },
+  role: {
+    type: DataTypes.ENUM("superAdmin", "posStaff"),
+    allowNull: false,
+    defaultValue: "posStaff",
+  },
 })
 
 module.exports = Admin

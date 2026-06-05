@@ -14,7 +14,10 @@ const { getProductFilters } = require("../../controllers/AggregateProducts/getPr
 const { getFilteredProducts } = require("../../controllers/AggregateProducts/getFilteredProduct.controller");
 
 const adminAuth = require("../../middleware/admin.auth.middleware")
-const {protected, optionalAuth} = require("../../middleware/user.logout.middleware")
+const {protected, optionalAuth} = require("../../middleware/user.logout.middleware");
+const { printLabel } = require("../../controllers/AggregateProducts/printLabel.controller");
+const { getProductByQRCode } = require("../../controllers/AggregateProducts/getProductByQrCode.controller");
+const { viewLabel } = require("../../controllers/AggregateProducts/viewLabel.controller");
 
 
 // router.post("/products", upload.any(), productController.createProduct)
@@ -26,10 +29,16 @@ router.post("/products", upload.any(), adminAuth, createProduct)
 router.get("/filters", getProductFilters);        //  filter metadata
 router.get("/products", optionalAuth, getFilteredProducts); 
 
+
+
 // router.get("/", productController.getAllProductsDetails)
 // router.get("/:id", productController.getProductById)
 router.get("/", getAllProductsDetails)
 router.get("/:id", getProductById)
+router.get(
+  "/product/:productCode",
+  getProductByQRCode
+);
 
 // router.put("/:id", upload.any(), productController.updateProductDetails)
 router.put("/:id", upload.any(), adminAuth, updateProductDetails)
@@ -39,6 +48,11 @@ router.delete('/:id', adminAuth, softDeleteProduct)
 
 // router.delete('/delete/:id', productController.deleteProductPermanently)
 router.delete('/delete/:id', adminAuth, deleteProductPermanently)
+
+router.get("/print-label/:productId", printLabel)  // Download
+router.get("/view-label/:productId", viewLabel);  // Open in browser
+
+
 
 
 module.exports = router
